@@ -7,9 +7,9 @@ require_once '../db.php';
 define('COMMUTER_REDIRECT', '../commuter/commuter.php');
 
 // ── GOOGLE OAuth CONFIG ─────────────────────────────────────
-define('GOOGLE_CLIENT_ID', $_ENV['GOOGLE_CLIENT_ID'] ?? '');
-define('GOOGLE_CLIENT_SECRET', $_ENV['GOOGLE_CLIENT_SECRET'] ?? '');
-define('GOOGLE_REDIRECT_URI', $_ENV['GOOGLE_REDIRECT_URI'] ?? '');
+define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+define('GOOGLE_REDIRECT_URI', getenv('GOOGLE_REDIRECT_URI') ?: '');
 
 // ── HELPERS ─────────────────────────────────────────────────
 function bail(string $msg): void {
