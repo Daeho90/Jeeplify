@@ -18,8 +18,8 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
 //    the 16-character password below (no spaces).
 define('SMTP_HOST',      'smtp.gmail.com');
 define('SMTP_PORT',      587);
-define('SMTP_USERNAME',  'itsmejoeven18@gmail.com');   // TODO: set this
-define('SMTP_PASSWORD',  'zaby viut ktry eiql');                // TODO: 16-char app password
+define('SMTP_USERNAME',  getenv('SMTP_USERNAME') ?: '');
+define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD') ?: '');                // TODO: 16-char app password
 define('SMTP_FROM',      SMTP_USERNAME);
 define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
@@ -60,10 +60,9 @@ const ROLE_REDIRECTS = [
 ];
 
 // ── GOOGLE OAuth CONFIG ─────────────────────────────────────
-define('GOOGLE_CLIENT_ID', $_ENV['GOOGLE_CLIENT_ID'] ?? '');
-define('GOOGLE_CLIENT_SECRET', $_ENV['GOOGLE_CLIENT_SECRET'] ?? '');
-define('GOOGLE_REDIRECT_URI', $_ENV['GOOGLE_REDIRECT_URI'] ?? '');
-
+define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+define('GOOGLE_REDIRECT_URI', getenv('GOOGLE_REDIRECT_URI') ?: '');
 // ── HELPERS ──────────────────────────────────────────────────
 function jsonOut(bool $ok, string $msg, array $extra = []): void {
     header('Content-Type: application/json');
