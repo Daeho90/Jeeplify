@@ -637,7 +637,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
 <!-- ═══ SPLASH / LOADING SCREEN ═══ -->
 <div id="splashScreen">
   <video id="splashVideo" autoplay muted playsinline webkit-playsinline preload="auto">
-    <source src="Animation2.mp4" type="video/mp4">
+    <source src="Animation.mp4" type="video/mp4">
   </video>
   <div class="splash-loader"><div class="splash-loader-bar" id="splashLoaderBar"></div></div>
 </div>
