@@ -628,6 +628,14 @@ if ($accountId) {
 </div>
 <script>
 
+function setAppHeight() {
+  const h = window.innerHeight + 'px';
+  document.documentElement.style.setProperty('--app-height', h);
+  document.documentElement.style.height = h;
+  document.body.style.height = h;
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
 
 const DEFAULT_LAT = 10.6765, DEFAULT_LNG = 122.9509;
 const MAP_THEMES = {
