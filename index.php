@@ -827,6 +827,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     const FALLBACK_MS = 6500; // safety timeout in case the video can't load/play
     let dismissed = false;
 
+    // Skip the splash entirely if we've already shown it this tab/session
+    // (e.g. user just logged out and got redirected back here)
+    if (sessionStorage.getItem('splashShown')) {
+      splash.classList.add('gone');
+      document.body.classList.remove('splash-active');
+      return; // don't touch the <video> at all, so it never starts playing
+    }
+    sessionStorage.setItem('splashShown', '1');
+
     function dismissSplash() {
       if (dismissed) return;
       dismissed = true;
