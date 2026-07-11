@@ -65,7 +65,7 @@ if ($accountId) {
     }
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     html, body { width:100%; height:100%; overflow:hidden; font-family:'Montserrat',sans-serif; background:var(--bg); color:var(--text); }
-    .app { position:relative; width:100%; height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+    .app { position:relative; width:100%; height:100vh; height:var(--app-height, 100vh); display:flex; flex-direction:column; overflow:hidden; }
     .map-area { position:relative; flex:1; min-height:0; overflow:hidden; }
     #map { position:absolute; inset:0; width:100%; height:100%; z-index:1; }
     .leaflet-container { background:#0d1321 !important; }
@@ -627,7 +627,13 @@ if ($accountId) {
   </div>
 </div>
 <script>
-/* ── Map defaults ── */
+function setAppHeight() {
+  document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', setAppHeight);
+
 const DEFAULT_LAT = 10.6765, DEFAULT_LNG = 122.9509;
 const MAP_THEMES = {
   dawn:  { tile:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                 icon:'🌅', label:'dawn'  },
