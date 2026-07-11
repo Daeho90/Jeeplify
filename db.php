@@ -4,11 +4,10 @@
 //  Reusable database connection — include this in any page
 //  Usage: require_once 'db.php';  then use $pdo
 // ════════════════════════════════════════════════════════════
-
-define('DB_HOST', 'sql113.infinityfree.com');
-define('DB_NAME', 'if0_41976004_jeeplify_bcd');
-define('DB_USER', 'if0_41976004');
-define('DB_PASS', 'ps42BuY87T');         // ← change this
+define('DB_HOST', getenv('DB_HOST'));
+define('DB_NAME', getenv('DB_NAME'));
+define('DB_USER', getenv('DB_USER'));
+define('DB_PASS', getenv('DB_PASS'));
 
 try {
     $pdo = new PDO(

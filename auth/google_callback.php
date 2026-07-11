@@ -6,10 +6,9 @@ require_once '../db.php';
 
 define('COMMUTER_REDIRECT', '../commuter/commuter.php');
 
-// ── GOOGLE OAuth CONFIG ─────────────────────────────────────
-define('GOOGLE_CLIENT_ID',     '304618062248-50e9c4n1ann090v0h9jefscjhni5t0h9.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET', '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');
-define('GOOGLE_REDIRECT_URI',  'https://bcd-jeepney.kesug.com/auth/google_callback.php');
+define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID'));
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET'));
+define('GOOGLE_REDIRECT_URI',  'https://jeeplify.onrender.com/auth/google_callback.php');
 
 // ── HELPERS ─────────────────────────────────────────────────
 function bail(string $msg): void {

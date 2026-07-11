@@ -18,8 +18,8 @@ use PHPMailer\PHPMailer\Exception as PHPMailerException;
 //    the 16-character password below (no spaces).
 define('SMTP_HOST',      'smtp.gmail.com');
 define('SMTP_PORT',      587);
-define('SMTP_USERNAME',  'itsmejoeven18@gmail.com');   // TODO: set this
-define('SMTP_PASSWORD',  'zaby viut ktry eiql');                // TODO: 16-char app password
+define('SMTP_USERNAME',  getenv('SMTP_USERNAME'));
+define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD'));             // TODO: 16-char app password
 define('SMTP_FROM',      SMTP_USERNAME);
 define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
@@ -60,9 +60,9 @@ const ROLE_REDIRECTS = [
 ];
 
 // ── GOOGLE OAuth CONFIG ─────────────────────────────────────
-define('GOOGLE_CLIENT_ID',     '304618062248-50e9c4n1ann090v0h9jefscjhni5t0h9.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET', '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');
-define('GOOGLE_REDIRECT_URI',  'https://bcd-jeepney.kesug.com/auth/google_callback.php');
+define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID'));
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET'));
+define('GOOGLE_REDIRECT_URI',  'https://jeeplify.onrender.com/auth/google_callback.php');
 
 // ── HELPERS ──────────────────────────────────────────────────
 function jsonOut(bool $ok, string $msg, array $extra = []): void {
@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare('INSERT INTO password_resets (account_id, token, expires_at) VALUES (?,?,?)')
                ->execute([$acc['id'], $token, $expiresAt]);
 
-            $resetLink = 'https://bcd-jeepney.kesug.com/reset_password.php?token=' . $token;
+            $resetLink = 'https://jeeplify.onrender.com/reset_password.php?token=' . $token;
 
             $subject = 'Reset Your Jeeplify Password';
             $body    = "Hello,\n\nClick the link below to reset your password (expires in 1 hour):\n\n$resetLink\n\nIf you did not request this, you can safely ignore this email.\n\n— Jeeplify Team";
