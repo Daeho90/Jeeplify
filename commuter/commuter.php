@@ -464,6 +464,25 @@ if ($accountId) {
   </style>
 </head>
 <body>
+
+</head>
+<body>
+<script>
+  window.onerror = function (msg, url, line, col, error) {
+    document.body.innerHTML =
+      '<div style="background:#000;color:#0f0;font-family:monospace;' +
+      'font-size:12px;padding:16px;white-space:pre-wrap;word-break:break-all;">' +
+      'ERROR: ' + msg + '\n' +
+      'FILE: ' + url + '\n' +
+      'LINE: ' + line + ':' + col + '\n\n' +
+      (error && error.stack ? error.stack : '') +
+      '</div>';
+    return true;
+  };
+</script>
+<!-- PROFILE CARD OVERLAY -->
+<div class="profile-card-overlay" id="profileOverlay" onclick="closeProf...
+
 <!-- PROFILE CARD OVERLAY -->
 <div class="profile-card-overlay" id="profileOverlay" onclick="closeProfileCard()"></div>
 <!-- PROFILE CARD -->
