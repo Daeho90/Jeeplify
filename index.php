@@ -28,29 +28,37 @@ define('SMTP_FROM_NAME', 'Jeeplify BCD');
  * On failure, $errorOut is populated with a human-readable reason.
  */
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
+    $apiKey = getenv('RESEND_API_KEY');
 
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
-        $mail->addAddress($toEmail);
+    $payload = json_encode([
+        'from'    => 'Jeeplify BCD <onboarding@resend.dev>',
+        'to'      => [$toEmail],
+        'subject' => $subject,
+        'text'    => $body,
+    ]);
 
-        $mail->isHTML(false);
-        $mail->Subject = $subject;
-        $mail->Body    = $body;
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+    ]);
 
-        $mail->send();
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 || $httpCode === 201) {
         return true;
-    } catch (PHPMailerException $e) {
-        $errorOut = $mail->ErrorInfo ?: $e->getMessage();
-        return false;
     }
+
+    $errorOut = 'Resend API error: ' . $response;
+    error_log($errorOut);
+    return false;
 }
 
 const ROLE_REDIRECTS = [
