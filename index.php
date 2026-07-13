@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!$sent) {
                 error_log('Forgot password mail error: ' . $mailError);
-                jsonOut(false, 'Could not send the reset email right now. Please try again later.');
+                jsonOut(false, $mailError ?: 'Unknown mail error');
             }
 
             jsonOut(true, 'If that email exists, a reset link has been sent.');
