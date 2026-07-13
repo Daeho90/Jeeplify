@@ -159,7 +159,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── FORGOT PASSWORD ──────────────────────────────────────
     if ($action === 'forgot_password') {
-        jsonOut(false, 'TEST: reached forgot_password action');
         $email = clean($_POST['email'] ?? '');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL))
