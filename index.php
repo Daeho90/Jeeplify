@@ -25,8 +25,9 @@ function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$
         $mail->SMTPAuth   = true;
         $mail->Username   = getenv('SMTP_USERNAME');
         $mail->Password   = getenv('SMTP_PASSWORD');
-        $mail->SMTPSecure = 'tls';
-        $mail->Port       = 587;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        $mail->Port       = 465;
+        $mail->Timeout    = 10;
 
         $mail->setFrom(getenv('SMTP_USERNAME'), 'Jeeplify BCD');
         $mail->addAddress($toEmail);
