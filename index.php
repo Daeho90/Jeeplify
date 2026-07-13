@@ -262,43 +262,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       background:#0b1220;
     }
     body { position:relative; color:#fff; }
-    body.splash-active { overflow:hidden; height:100vh; }
-
-    /* ── SPLASH / LOADING SCREEN ── */
-    #splashScreen {
-      position:fixed; inset:0; z-index:9999;
-      background:#000;
-      display:flex; align-items:center; justify-content:center;
-      overflow:hidden;
-      opacity:1;
-      transition:opacity .6s ease;
-    }
-    #splashScreen.fade-out { opacity:0; pointer-events:none; }
-    #splashScreen.gone { display:none; }
-    #splashVideo {
-      display:block;
-      width:100%; height:100%;
-      min-width:100%; min-height:100%;
-      object-fit:cover;
-      object-position:center center;
-    }
-    .splash-loader {
-      position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
-      width:140px; height:3px; border-radius:3px;
-      background:rgba(255,255,255,0.18);
-      overflow:hidden;
-      z-index:2;
-    }
-    .splash-loader-bar {
-      height:100%; width:0%;
-      background:#60a5fa;
-      border-radius:3px;
-      transition:width .1s linear;
-    }
-
-    @media (max-width: 480px) {
-      .splash-loader { bottom:24px; width:110px; }
-    }
 
     .hero-bg { position:fixed; inset:0; z-index:0; }
     .hero-bg img {
@@ -640,15 +603,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     }
   </style>
 </head>
-<body class="splash-active">
-
-<!-- ═══ SPLASH / LOADING SCREEN ═══ -->
-<div id="splashScreen">
-  <video id="splashVideo" autoplay muted playsinline webkit-playsinline preload="auto">
-    <source src="Animation2.mp4" type="video/mp4">
-  </video>
-  <div class="splash-loader"><div class="splash-loader-bar" id="splashLoaderBar"></div></div>
-</div>
+<body>
 
 <div class="hero-bg">
   <img src="Modern.jpg" alt="Bacolod City">
@@ -827,39 +782,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
 <div class="toast" id="toast"></div>
 
 <script>
-  // ── SPLASH SCREEN ─────────────────────────────────────────
-  (function () {
-    const splash     = document.getElementById('splashScreen');
-    const video      = document.getElementById('splashVideo');
-    const loaderBar  = document.getElementById('splashLoaderBar');
-    const FALLBACK_MS = 6500; // safety timeout in case the video can't load/play
-    let dismissed = false;
-
-    function dismissSplash() {
-      if (dismissed) return;
-      dismissed = true;
-      splash.classList.add('fade-out');
-      document.body.classList.remove('splash-active');
-      setTimeout(() => splash.classList.add('gone'), 650);
-    }
-
-    video.addEventListener('ended', dismissSplash);
-    video.addEventListener('error', dismissSplash);
-
-    // Drive the little progress bar off actual video playback time
-    video.addEventListener('timeupdate', () => {
-      if (video.duration) {
-        loaderBar.style.width = Math.min(100, (video.currentTime / video.duration) * 100) + '%';
-      }
-    });
-
-    // Safety net: some mobile browsers can block autoplay entirely
-    setTimeout(dismissSplash, FALLBACK_MS);
-
-    // If autoplay with sound gets blocked, retry muted (should already be muted, but just in case)
-    video.play().catch(() => { video.muted = true; video.play().catch(dismissSplash); });
-  })();
-
   const slider        = document.getElementById('slider');
   const cardWrap      = document.getElementById('cardWrap');
   const loginPanel    = document.getElementById('loginPanel');
