@@ -36,7 +36,7 @@ function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$
         $mail->send();
         return true;
     } catch (PHPMailerException $e) {
-        $errorOut = 'Mailer error: ' . $mail->ErrorInfo;
+        $errorOut = 'Mailer error: ' . $e->getMessage() . ' | ' . $mail->ErrorInfo;
         error_log($errorOut);
         return false;
     }
@@ -159,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── FORGOT PASSWORD ──────────────────────────────────────
     if ($action === 'forgot_password') {
+        jsonOut(false, 'TEST: reached forgot_password action');
         $email = clean($_POST['email'] ?? '');
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL))
@@ -189,9 +190,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = sendMailSMTP($email, $subject, $body, $mailError);
 
             if (!$sent) {
-    error_log('Forgot password mail error: ' . $mailError);
-    jsonOut(false, $mailError);
-}
+                error_log('Forgot password mail error: ' . $mailError);
+                jsonOut(false, 'Could not send the reset email right now. Please try again later.');
+            }
 
             jsonOut(true, 'If that email exists, a reset link has been sent.');
 
