@@ -10,55 +10,36 @@ require_once 'PHPMailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-// ── SMTP CONFIG (Gmail) ──────────────────────────────────────
-// 1. Use a Gmail address you control.
-// 2. Turn on 2-Step Verification on that Google account.
-// 3. Create an "App Password": https://myaccount.google.com/apppasswords
-//    (choose app "Mail", device "Other" -> name it "Jeeplify") and paste
-//    the 16-character password below (no spaces).
 define('SMTP_HOST',      'smtp.gmail.com');
 define('SMTP_PORT',      587);
 define('SMTP_USERNAME',  getenv('SMTP_USERNAME'));
-define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD'));             // TODO: 16-char app password
+define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD'));
 define('SMTP_FROM',      SMTP_USERNAME);
 define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
-/**
- * Send an email via SMTP (Gmail). Returns true on success, false on failure.
- * On failure, $errorOut is populated with a human-readable reason.
- */
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $apiKey = getenv('RESEND_API_KEY');
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com';
+        $mail->SMTPAuth   = true;
+        $mail->Username   = getenv('SMTP_USERNAME');
+        $mail->Password   = getenv('SMTP_PASSWORD');
+        $mail->SMTPSecure = 'tls';
+        $mail->Port       = 587;
 
-    $payload = json_encode([
-        'from'    => 'Jeeplify BCD <onboarding@resend.dev>',
-        'to'      => [$toEmail],
-        'subject' => $subject,
-        'text'    => $body,
-    ]);
+        $mail->setFrom(getenv('SMTP_USERNAME'), 'Jeeplify BCD');
+        $mail->addAddress($toEmail);
+        $mail->Subject = $subject;
+        $mail->Body    = $body;
 
-    $ch = curl_init('https://api.resend.com/emails');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $apiKey,
-            'Content-Type: application/json',
-        ],
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode === 200 || $httpCode === 201) {
+        $mail->send();
         return true;
+    } catch (PHPMailerException $e) {
+        $errorOut = 'Mailer error: ' . $mail->ErrorInfo;
+        error_log($errorOut);
+        return false;
     }
-
-    $errorOut = 'Resend API error: ' . $response;
-    error_log($errorOut);
-    return false;
 }
 
 const ROLE_REDIRECTS = [
@@ -67,12 +48,10 @@ const ROLE_REDIRECTS = [
     'user'     => 'commuter/commuter.php',
 ];
 
-// ── GOOGLE OAuth CONFIG ─────────────────────────────────────
 define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID'));
 define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET'));
 define('GOOGLE_REDIRECT_URI',  'https://jeeplify.onrender.com/auth/google_callback.php');
 
-// ── HELPERS ──────────────────────────────────────────────────
 function jsonOut(bool $ok, string $msg, array $extra = []): void {
     header('Content-Type: application/json');
     echo json_encode(array_merge(['ok' => $ok, 'message' => $msg], $extra));
@@ -210,9 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = sendMailSMTP($email, $subject, $body, $mailError);
 
             if (!$sent) {
-               error_log('Forgot password mail error: ' . $mailError);
-              jsonOut(false, 'Could not send the reset email right now. Please try again later.');
-          }
+                error_log('Forgot password mail error: ' . $mailError);
+                jsonOut(false, 'Could not send the reset email right now. Please try again later.');
+            }
 
             jsonOut(true, 'If that email exists, a reset link has been sent.');
 
@@ -231,13 +210,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     $_SESSION['oauth_state'] = $state;
 
     $params = http_build_query([
-        'client_id'             => GOOGLE_CLIENT_ID,
-        'redirect_uri'          => GOOGLE_REDIRECT_URI,
-        'response_type'         => 'code',
-        'scope'                 => 'openid email profile',
-        'state'                 => $state,
-        'access_type'           => 'online',
-        'prompt'                => 'select_account',
+        'client_id'     => GOOGLE_CLIENT_ID,
+        'redirect_uri'  => GOOGLE_REDIRECT_URI,
+        'response_type' => 'code',
+        'scope'         => 'openid email profile',
+        'state'         => $state,
+        'access_type'   => 'online',
+        'prompt'        => 'select_account',
     ]);
 
     header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . $params);
@@ -419,7 +398,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     }
     .divider span { font-size:10px; color:rgba(255,255,255,0.35); white-space:nowrap; }
 
-    /* ── GOOGLE BUTTON ── */
     .btn-google {
       width:100%; height:42px;
       border:1px solid rgba(255,255,255,0.20);
@@ -508,7 +486,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     .toast.success { background:rgba(34,197,94,0.96);   box-shadow:0 4px 20px rgba(34,197,94,0.35); }
     .toast.show    { transform:translateX(-50%) translateY(0); opacity:1; }
 
-    /* ── FORGOT PASSWORD MODAL ── */
     .modal-backdrop {
       position:fixed; inset:0; z-index:100;
       background:rgba(8,12,25,0.72);
@@ -582,7 +559,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.30);
     }
 
-    /* ── RESPONSIVE ── */
     @media (max-width: 900px) {
       .hero-overlay { background:linear-gradient(180deg, rgba(8,12,25,.55) 0%, rgba(8,12,25,.62) 100%); }
       .page { justify-content:center; padding:24px 20px; align-items:center; }
@@ -657,9 +633,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
 
           <div class="divider"><span>or continue with</span></div>
 
-          <!-- Google Login Button -->
           <button class="btn-google" onclick="handleGoogle()">
-            <!-- Official Google "G" logo SVG -->
             <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
               <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -839,7 +813,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     el.addEventListener('input', () => el.classList.remove('error'), { once: true });
   }
 
-  // ── LOGIN ─────────────────────────────────────────────────
   function handleLogin(e) {
     const email    = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -857,7 +830,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
   }
 
-  // ── REGISTER ─────────────────────────────────────────────
   function handleRegister(e) {
     const fullName  = document.getElementById('regName').value.trim();
     const email     = document.getElementById('regEmail').value.trim();
@@ -879,17 +851,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
   }
 
-  // ── GOOGLE LOGIN ──────────────────────────────────────────
   function handleGoogle() {
     window.location.href = 'index.php?action=google_auth';
   }
 
-  // ── GUEST ─────────────────────────────────────────────────
   function handleGuest() {
     window.location.href = 'commuter/commuter.php?guest=1';
-}
+  }
 
-  // ── FORGOT PASSWORD MODAL ─────────────────────────────────
   function openForgotModal() {
     document.getElementById('forgotFormArea').classList.remove('hidden');
     document.getElementById('forgotSentArea').classList.remove('show');
@@ -926,7 +895,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
   }
 
-  // ── KEYBOARD ──────────────────────────────────────────────
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeForgotModal(); return; }
     if (e.key !== 'Enter') return;
