@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } catch (PDOException $e) {
             error_log('Forgot password error: ' . $e->getMessage());
-            jsonOut(false, 'Server error. Please try again.');
+            jsonOut(false, 'DB error: ' . $e->getMessage());
         }
     }
 
