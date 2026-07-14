@@ -9,7 +9,7 @@ define('SMTP_FROM_EMAIL', 'onboarding@resend.dev');
 define('SMTP_FROM_NAME',  'Jeeplify BCD');
 
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $apiKey = 're_85Ayn4CC_HqLA6i3WdibpfAL3xQSRmCev';
+    $apiKey = getenv('RESEND_API_KEY');
 
     $payload = json_encode([
         'from'    => SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>',
