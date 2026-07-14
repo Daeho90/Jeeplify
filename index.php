@@ -10,56 +10,33 @@ require_once 'PHPMailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-define('SMTP_HOST',      'smtp-relay.brevo.com');
-define('SMTP_PORT',      587);
-define('SMTP_USERNAME',  getenv('BREVO_SMTP_USER'));
-define('SMTP_PASSWORD',  getenv('BREVO_SMTP_PASS'));
-define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'no-reply@jeeplify.onrender.com');
-define('SMTP_FROM_NAME', 'Jeeplify BCD');
+define('SMTP_FROM_EMAIL', 'itsmejoeven18@gmail.com');
+define('SMTP_FROM_NAME',  'Jeeplify BCD');
 
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $apiKey = getenv('BREVO_API_KEY');
-    
-    if (!$apiKey) {
-        $errorOut = 'BREVO_API_KEY is not set';
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = 'smtp.gmail.com';
+        $mail->SMTPAuth   = true;
+        $mail->Username   = 'itsmejoeven18@gmail.com';
+        $mail->Password   = 'zloz mwif umkk nhuf';
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = 587;
+
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+        $mail->Subject = $subject;
+        $mail->Body    = $body;
+
+        $mail->send();
+        error_log('Gmail SMTP: email sent to ' . $toEmail);
+        return true;
+    } catch (PHPMailerException $e) {
+        $errorOut = 'Gmail SMTP error: ' . $mail->ErrorInfo;
         error_log($errorOut);
         return false;
     }
-
-    $payload = json_encode([
-        'sender'     => ['name' => SMTP_FROM_NAME, 'email' => SMTP_FROM_EMAIL],
-        'to'         => [['email' => $toEmail]],
-        'subject'    => $subject,
-        'textContent'=> $body,
-    ]);
-
-    error_log('Brevo payload: ' . $payload);
-    error_log('Brevo FROM: ' . SMTP_FROM_EMAIL);
-
-    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => [
-            'accept: application/json',
-            'api-key: ' . $apiKey,
-            'content-type: application/json',
-        ],
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    error_log('Brevo response code: ' . $httpCode);
-    error_log('Brevo response body: ' . $response);
-
-    if ($httpCode === 201) return true;
-
-    $errorOut = 'Brevo API error: HTTP ' . $httpCode . ' — ' . $response;
-    error_log($errorOut);
-    return false;
 }
 
 const ROLE_REDIRECTS = [
