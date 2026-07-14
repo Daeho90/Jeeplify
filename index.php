@@ -20,12 +20,21 @@ define('SMTP_FROM_NAME', 'Jeeplify BCD');
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
     $apiKey = getenv('BREVO_API_KEY');
     
+    if (!$apiKey) {
+        $errorOut = 'BREVO_API_KEY is not set';
+        error_log($errorOut);
+        return false;
+    }
+
     $payload = json_encode([
         'sender'     => ['name' => SMTP_FROM_NAME, 'email' => SMTP_FROM_EMAIL],
         'to'         => [['email' => $toEmail]],
         'subject'    => $subject,
         'textContent'=> $body,
     ]);
+
+    error_log('Brevo payload: ' . $payload);
+    error_log('Brevo FROM: ' . SMTP_FROM_EMAIL);
 
     $ch = curl_init('https://api.brevo.com/v3/smtp/email');
     curl_setopt_array($ch, [
@@ -42,6 +51,9 @@ function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    error_log('Brevo response code: ' . $httpCode);
+    error_log('Brevo response body: ' . $response);
 
     if ($httpCode === 201) return true;
 
