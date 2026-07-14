@@ -3,40 +3,44 @@
 session_start();
 
 require_once 'db.php';
-require_once 'PHPMailer/src/Exception.php';
-require_once 'PHPMailer/src/PHPMailer.php';
-require_once 'PHPMailer/src/SMTP.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-define('SMTP_FROM_EMAIL', 'itsmejoeven18@gmail.com');
+define('SMTP_FROM_EMAIL', 'onboarding@resend.dev');
 define('SMTP_FROM_NAME',  'Jeeplify BCD');
 
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';
-        $mail->SMTPAuth   = true;
-        $mail->Username   = 'itsmejoeven18@gmail.com';
-        $mail->Password   = 'zloz mwif umkk nhuf';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = 587;
+    $apiKey = 're_85Ayn4CC_HqLA6i3WdibpfAL3xQSRmCev';
 
-        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
-        $mail->addAddress($toEmail);
-        $mail->Subject = $subject;
-        $mail->Body    = $body;
+    $payload = json_encode([
+        'from'    => SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>',
+        'to'      => [$toEmail],
+        'subject' => $subject,
+        'text'    => $body,
+    ]);
 
-        $mail->send();
-        error_log('Gmail SMTP: email sent to ' . $toEmail);
-        return true;
-    } catch (PHPMailerException $e) {
-        $errorOut = 'Gmail SMTP error: ' . $mail->ErrorInfo;
-        error_log($errorOut);
-        return false;
-    }
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    error_log('Resend response code: ' . $httpCode);
+    error_log('Resend response body: ' . $response);
+
+    if ($httpCode === 200 || $httpCode === 201) return true;
+
+    $errorOut = 'Resend error: HTTP ' . $httpCode . ' — ' . $response;
+    error_log($errorOut);
+    return false;
 }
 
 const ROLE_REDIRECTS = [
