@@ -10,26 +10,26 @@ require_once 'PHPMailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-define('SMTP_HOST',      'smtp.gmail.com');
+define('SMTP_HOST',      'smtp-relay.brevo.com');
 define('SMTP_PORT',      587);
-define('SMTP_USERNAME',  getenv('SMTP_USERNAME'));
-define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD'));
-define('SMTP_FROM',      SMTP_USERNAME);
+define('SMTP_USERNAME',  getenv('BREVO_SMTP_USER'));
+define('SMTP_PASSWORD',  getenv('BREVO_SMTP_PASS'));
+define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'no-reply@jeeplify.onrender.com');
 define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';
+        $mail->Host       = SMTP_HOST;
         $mail->SMTPAuth   = true;
-        $mail->Username   = getenv('SMTP_USERNAME');
-        $mail->Password   = getenv('SMTP_PASSWORD');
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        $mail->Port       = 465;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
         $mail->Timeout    = 10;
 
-        $mail->setFrom(getenv('SMTP_USERNAME'), 'Jeeplify BCD');
+        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
         $mail->addAddress($toEmail);
         $mail->Subject = $subject;
         $mail->Body    = $body;
