@@ -18,29 +18,36 @@ define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'no-reply@jeeplify.onrend
 define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
 function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
-        $mail->Timeout    = 10;
+    $apiKey = getenv('BREVO_API_KEY');
+    
+    $payload = json_encode([
+        'sender'     => ['name' => SMTP_FROM_NAME, 'email' => SMTP_FROM_EMAIL],
+        'to'         => [['email' => $toEmail]],
+        'subject'    => $subject,
+        'textContent'=> $body,
+    ]);
 
-        $mail->setFrom(SMTP_FROM_EMAIL, SMTP_FROM_NAME);
-        $mail->addAddress($toEmail);
-        $mail->Subject = $subject;
-        $mail->Body    = $body;
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'accept: application/json',
+            'api-key: ' . $apiKey,
+            'content-type: application/json',
+        ],
+    ]);
 
-        $mail->send();
-        return true;
-    } catch (PHPMailerException $e) {
-        $errorOut = 'Mailer error: ' . $e->getMessage() . ' | ' . $mail->ErrorInfo;
-        error_log($errorOut);
-        return false;
-    }
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 201) return true;
+
+    $errorOut = 'Brevo API error: HTTP ' . $httpCode . ' — ' . $response;
+    error_log($errorOut);
+    return false;
 }
 
 const ROLE_REDIRECTS = [
