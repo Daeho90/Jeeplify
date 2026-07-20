@@ -46,27 +46,30 @@ if ($message === '') {
 // ── 4. Fetch live data from your DB ──────────────────────────────────────────
 
 /**
- * Returns active drivers with their latest GPS position.
- * Adjust table/column names to match your schema.
+ * Returns active jeepneys with their latest GPS position.
+ * Matches the real Jeeplify schema:
+ *   jeepneys, driver_jeepney, driver_locations, driver_profiles, routes
  */
 function getActiveDrivers(PDO $pdo): array {
     $stmt = $pdo->query("
         SELECT
-            d.id,
-            d.name          AS driver_name,
-            v.plate_number,
-            r.name          AS route_name,
-            dl.latitude,
-            dl.longitude,
+            j.unit_code,
+            j.plate_no,
+            r.name           AS route_name,
+            dp.full_name     AS driver_name,
+            dl.lat,
+            dl.lng,
             dl.status,
-            dl.recorded_at
-        FROM drivers d
-        JOIN vehicles        v  ON v.driver_id  = d.id
-        JOIN routes          r  ON r.id         = v.route_id
-        JOIN driver_locations dl ON dl.driver_id = d.id
-        WHERE dl.status IN ('on_duty', 'available')
-          AND dl.recorded_at >= NOW() - INTERVAL 10 MINUTE
-        ORDER BY dl.recorded_at DESC
+            dl.eta_minutes,
+            dl.eta_dist_km,
+            dl.updated_at
+        FROM driver_jeepney dj
+        JOIN jeepneys j          ON j.id = dj.jeepney_id
+        JOIN driver_locations dl ON dl.account_id = dj.driver_id
+        LEFT JOIN driver_profiles dp ON dp.account_id = dj.driver_id
+        LEFT JOIN routes r           ON r.id = j.route_id
+        WHERE dl.updated_at >= NOW() - INTERVAL 10 MINUTE
+        ORDER BY dl.updated_at DESC
     ");
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -76,7 +79,7 @@ function getActiveDrivers(PDO $pdo): array {
  */
 function getRoutes(PDO $pdo): array {
     $stmt = $pdo->query("
-        SELECT id, name, description, start_point, end_point, fare
+        SELECT id, name, description
         FROM routes
         ORDER BY name
     ");
@@ -89,12 +92,12 @@ function getRoutes(PDO $pdo): array {
 function getActiveBookings(PDO $pdo): array {
     $stmt = $pdo->query("
         SELECT b.id, b.pickup_location, b.dropoff_location,
-               b.scheduled_time, b.status, r.name AS route_name
+               b.booking_date, b.booking_time, b.status, r.name AS route_name
         FROM bookings b
-        JOIN routes r ON r.id = b.route_id
-        WHERE b.status IN ('pending', 'confirmed')
-          AND b.scheduled_time >= NOW()
-        ORDER BY b.scheduled_time ASC
+        LEFT JOIN routes r ON r.id = b.route_id
+        WHERE b.status IN ('pending', 'approved')
+          AND b.booking_date >= CURDATE()
+        ORDER BY b.booking_date ASC, b.booking_time ASC
         LIMIT 20
     ");
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
