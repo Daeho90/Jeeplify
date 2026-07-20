@@ -1,15 +1,15 @@
 <?php
 /**
- * Jeeplify BCD – AI Agent Endpoint
+ * Jeeplify BCD – AI Agent Endpoint (Gemini version)
  * File: /api/agent.php
  *
  * Receives a commuter message, fetches live DB context,
- * calls Claude, and returns a JSON reply.
+ * calls Google Gemini, and returns a JSON reply.
  *
  * Requirements:
  *   - PHP 7.4+
  *   - Your existing DB connection file
- *   - ANTHROPIC_API_KEY set as an environment variable on Render
+ *   - GEMINI_API_KEY set as an environment variable on Render
  */
 
 header('Content-Type: application/json');
@@ -19,16 +19,16 @@ header('Access-Control-Allow-Origin: *'); // tighten in production
 require_once __DIR__ . '/../db.php';
 // Expects a PDO instance in $pdo
 
-// ── 2. Your Anthropic API key ─────────────────────────────────────────────────
-// Set ANTHROPIC_API_KEY as an environment variable in the Render dashboard
+// ── 2. Your Gemini API key ────────────────────────────────────────────────────
+// Set GEMINI_API_KEY as an environment variable in the Render dashboard
 // (Service → Environment tab). Never hardcode real keys in source files.
-define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: '');
-define('ANTHROPIC_API_URL', 'https://api.anthropic.com/v1/messages');
-define('CLAUDE_MODEL',      'claude-sonnet-4-6');
+define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
+define('GEMINI_MODEL',   'gemini-2.0-flash');
+define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/' . GEMINI_MODEL . ':generateContent');
 
-if (ANTHROPIC_API_KEY === '') {
+if (GEMINI_API_KEY === '') {
     http_response_code(500);
-    echo json_encode(['error' => 'Server misconfigured: ANTHROPIC_API_KEY is not set.']);
+    echo json_encode(['error' => 'Server misconfigured: GEMINI_API_KEY is not set.']);
     exit;
 }
 
@@ -156,40 +156,47 @@ Guidelines:
 - Keep replies short — commuters are usually on their phones on the go.
 PROMPT;
 
-// ── 6. Build the message array (supports multi-turn history) ──────────────────
-$messages = [];
+// ── 6. Build the Gemini "contents" array (supports multi-turn history) ────────
+// Gemini uses roles "user" and "model" (not "assistant"), and has no separate
+// "system" field in this API version — so we prepend the system prompt as the
+// first user turn, followed by a model acknowledgement.
+$contents = [
+    ['role' => 'user',  'parts' => [['text' => $systemPrompt]]],
+    ['role' => 'model', 'parts' => [['text' => 'Understood! Ready to help commuters.']]],
+];
 
 // Append past turns from frontend (each: {role: 'user'|'assistant', content: '...'})
 foreach ($history as $turn) {
-    if (in_array($turn['role'] ?? '', ['user', 'assistant']) && !empty($turn['content'])) {
-        $messages[] = [
-            'role'    => $turn['role'],
-            'content' => (string) $turn['content'],
+    $role = $turn['role'] ?? '';
+    if (in_array($role, ['user', 'assistant']) && !empty($turn['content'])) {
+        $contents[] = [
+            'role'  => $role === 'assistant' ? 'model' : 'user',
+            'parts' => [['text' => (string) $turn['content']]],
         ];
     }
 }
 
 // Append the new user message
-$messages[] = ['role' => 'user', 'content' => $message];
+$contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
 
-// ── 7. Call Claude ────────────────────────────────────────────────────────────
-function callClaude(string $systemPrompt, array $messages): string {
+// ── 7. Call Gemini ─────────────────────────────────────────────────────────────
+function callGemini(array $contents): string {
     $payload = json_encode([
-        'model'      => CLAUDE_MODEL,
-        'max_tokens' => 512,
-        'system'     => $systemPrompt,
-        'messages'   => $messages,
+        'contents'         => $contents,
+        'generationConfig' => [
+            'maxOutputTokens' => 512,
+        ],
     ]);
 
-    $ch = curl_init(ANTHROPIC_API_URL);
+    $url = GEMINI_API_URL . '?key=' . urlencode(GEMINI_API_KEY);
+
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
-            'x-api-key: ' . ANTHROPIC_API_KEY,
-            'anthropic-version: 2023-06-01',
         ],
         CURLOPT_TIMEOUT        => 30,
     ]);
@@ -200,19 +207,20 @@ function callClaude(string $systemPrompt, array $messages): string {
     curl_close($ch);
 
     if ($response === false) {
-        throw new RuntimeException("cURL error calling Anthropic API: {$curlErr}");
+        throw new RuntimeException("cURL error calling Gemini API: {$curlErr}");
     }
 
     if ($httpCode !== 200) {
-        throw new RuntimeException("Anthropic API error (HTTP {$httpCode}): {$response}");
+        throw new RuntimeException("Gemini API error (HTTP {$httpCode}): {$response}");
     }
 
     $data = json_decode($response, true);
-    return $data['content'][0]['text'] ?? 'Sorry, wala ko nasabat ang reply. Try again.';
+    return $data['candidates'][0]['content']['parts'][0]['text']
+        ?? 'Sorry, wala ko nasabat ang reply. Try again.';
 }
 
 try {
-    $reply = callClaude($systemPrompt, $messages);
+    $reply = callGemini($contents);
     echo json_encode(['reply' => $reply]);
 } catch (Exception $e) {
     http_response_code(500);
