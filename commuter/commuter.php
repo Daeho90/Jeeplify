@@ -888,7 +888,7 @@ if ($accountId) {
      AI AGENT CHAT WIDGET
 ══════════════════════════════════════════════ -->
 <button id="jeep-chat-btn" aria-label="Ask Jeep AI assistant" title="Ask Jeep">
-  <img src="Modern.png" alt="" class="jeep-btn-icon">
+  <img src="fav.png" alt="" class="jeep-btn-icon">
   <span id="jeep-unread">1</span>
 </button>
 
