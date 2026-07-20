@@ -1531,11 +1531,15 @@ window.addEventListener('resize', () => map.invalidateSize());
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ message:text, history:history.slice(-10) }),
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      const reply = data.reply || 'Pasensya, wala ko nasabat. Try again.';
-      addBotMessage(reply);
-      history.push({ role:'assistant', content:reply });
+const data = await res.json();
+if (data.limit_reached) {
+  addBotMessage(data.message || 'You have reached today\'s free question limit. Please come back tomorrow.');
+  return;
+}
+if (data.error) throw new Error(data.error);
+const reply = data.reply || 'Pasensya, wala ko nasabat. Try again.';
+addBotMessage(reply);
+history.push({ role:'assistant', content:reply });
     } catch(err) {
       addBotMessage('⚠️ May problema sa connection. Check your internet and try again.');
       console.error('Jeep agent error:', err);

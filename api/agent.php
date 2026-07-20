@@ -12,6 +12,7 @@
  *   - GEMINI_API_KEY set as an environment variable on Render
  */
 
+session_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *'); // tighten in production
 
@@ -29,6 +30,61 @@ define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/model
 if (GEMINI_API_KEY === '') {
     http_response_code(500);
     echo json_encode(['error' => 'Server misconfigured: GEMINI_API_KEY is not set.']);
+    exit;
+}
+
+// ── 2b. Daily question limit ──────────────────────────────────────────────────
+// Logged-in commuters are tracked by account_id; guests by their session id.
+define('DAILY_QUESTION_LIMIT', 5);
+
+$accountId = $_SESSION['account_id'] ?? null;
+$guestKey  = $accountId ? null : session_id();
+$today     = date('Y-m-d');
+
+function getTodayUsage(PDO $pdo, ?int $accountId, ?string $guestKey, string $today): int {
+    if ($accountId) {
+        $stmt = $pdo->prepare('SELECT question_count FROM agent_usage WHERE account_id = ? AND usage_date = ? LIMIT 1');
+        $stmt->execute([$accountId, $today]);
+    } else {
+        $stmt = $pdo->prepare('SELECT question_count FROM agent_usage WHERE guest_key = ? AND usage_date = ? LIMIT 1');
+        $stmt->execute([$guestKey, $today]);
+    }
+    $row = $stmt->fetch();
+    return $row ? (int) $row['question_count'] : 0;
+}
+
+function incrementTodayUsage(PDO $pdo, ?int $accountId, ?string $guestKey, string $today): void {
+    if ($accountId) {
+        $stmt = $pdo->prepare('
+            INSERT INTO agent_usage (account_id, usage_date, question_count)
+            VALUES (?, ?, 1)
+            ON DUPLICATE KEY UPDATE question_count = question_count + 1
+        ');
+        $stmt->execute([$accountId, $today]);
+    } else {
+        $stmt = $pdo->prepare('
+            INSERT INTO agent_usage (guest_key, usage_date, question_count)
+            VALUES (?, ?, 1)
+            ON DUPLICATE KEY UPDATE question_count = question_count + 1
+        ');
+        $stmt->execute([$guestKey, $today]);
+    }
+}
+
+try {
+    $usedToday = getTodayUsage($pdo, $accountId, $guestKey, $today);
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    exit;
+}
+
+if ($usedToday >= DAILY_QUESTION_LIMIT) {
+    http_response_code(429);
+    echo json_encode([
+        'limit_reached' => true,
+        'message' => "Naabot na nimo ang " . DAILY_QUESTION_LIMIT . " free questions para sa subong nga adlaw. Balik ka lang buas para makapangutana pa 🙂",
+    ]);
     exit;
 }
 
@@ -224,7 +280,9 @@ function callGemini(array $contents): string {
 
 try {
     $reply = callGemini($contents);
-    echo json_encode(['reply' => $reply]);
+    incrementTodayUsage($pdo, $accountId, $guestKey, $today);
+    $remaining = max(0, DAILY_QUESTION_LIMIT - ($usedToday + 1));
+    echo json_encode(['reply' => $reply, 'remaining_today' => $remaining]);
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
