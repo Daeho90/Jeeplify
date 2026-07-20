@@ -1,15 +1,15 @@
 <?php
 /**
- * Jeeplify BCD – AI Agent Endpoint (Gemini version)
+ * Jeeplify BCD – AI Agent Endpoint (Groq version)
  * File: /api/agent.php
  *
  * Receives a commuter message, fetches live DB context,
- * calls Google Gemini, and returns a JSON reply.
+ * calls Groq (Llama 3.3), and returns a JSON reply.
  *
  * Requirements:
  *   - PHP 7.4+
  *   - Your existing DB connection file
- *   - GEMINI_API_KEY set as an environment variable on Render
+ *   - GROQ_API_KEY set as an environment variable on Render
  */
 
 session_start();
@@ -20,16 +20,16 @@ header('Access-Control-Allow-Origin: *'); // tighten in production
 require_once __DIR__ . '/../db.php';
 // Expects a PDO instance in $pdo
 
-// ── 2. Your Gemini API key ────────────────────────────────────────────────────
-// Set GEMINI_API_KEY as an environment variable in the Render dashboard
+// ── 2. Your Groq API key ──────────────────────────────────────────────────────
+// Set GROQ_API_KEY as an environment variable in the Render dashboard
 // (Service → Environment tab). Never hardcode real keys in source files.
-define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
-define('GEMINI_MODEL',   'gemini-2.0-flash');
-define('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/' . GEMINI_MODEL . ':generateContent');
+define('GROQ_API_KEY', getenv('GROQ_API_KEY') ?: '');
+define('GROQ_MODEL',   'llama-3.3-70b-versatile');
+define('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions');
 
-if (GEMINI_API_KEY === '') {
+if (GROQ_API_KEY === '') {
     http_response_code(500);
-    echo json_encode(['error' => 'Server misconfigured: GEMINI_API_KEY is not set.']);
+    echo json_encode(['error' => 'Server misconfigured: GROQ_API_KEY is not set.']);
     exit;
 }
 
@@ -215,47 +215,41 @@ Guidelines:
 - Keep replies short — commuters are usually on their phones on the go.
 PROMPT;
 
-// ── 6. Build the Gemini "contents" array (supports multi-turn history) ────────
-// Gemini uses roles "user" and "model" (not "assistant"), and has no separate
-// "system" field in this API version — so we prepend the system prompt as the
-// first user turn, followed by a model acknowledgement.
-$contents = [
-    ['role' => 'user',  'parts' => [['text' => $systemPrompt]]],
-    ['role' => 'model', 'parts' => [['text' => 'Understood! Ready to help commuters.']]],
+// ── 6. Build the messages array (OpenAI-compatible format used by Groq) ───────
+$messages = [
+    ['role' => 'system', 'content' => $systemPrompt],
 ];
 
 // Append past turns from frontend (each: {role: 'user'|'assistant', content: '...'})
 foreach ($history as $turn) {
     $role = $turn['role'] ?? '';
     if (in_array($role, ['user', 'assistant']) && !empty($turn['content'])) {
-        $contents[] = [
-            'role'  => $role === 'assistant' ? 'model' : 'user',
-            'parts' => [['text' => (string) $turn['content']]],
+        $messages[] = [
+            'role'    => $role,
+            'content' => (string) $turn['content'],
         ];
     }
 }
 
 // Append the new user message
-$contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
+$messages[] = ['role' => 'user', 'content' => $message];
 
-// ── 7. Call Gemini ─────────────────────────────────────────────────────────────
-function callGemini(array $contents): string {
+// ── 7. Call Groq ────────────────────────────────────────────────────────────────
+function callGroq(array $messages): string {
     $payload = json_encode([
-        'contents'         => $contents,
-        'generationConfig' => [
-            'maxOutputTokens' => 512,
-        ],
+        'model'      => GROQ_MODEL,
+        'messages'   => $messages,
+        'max_tokens' => 512,
     ]);
 
-    $url = GEMINI_API_URL . '?key=' . urlencode(GEMINI_API_KEY);
-
-    $ch = curl_init($url);
+    $ch = curl_init(GROQ_API_URL);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => [
             'Content-Type: application/json',
+            'Authorization: Bearer ' . GROQ_API_KEY,
         ],
         CURLOPT_TIMEOUT        => 30,
     ]);
@@ -266,20 +260,20 @@ function callGemini(array $contents): string {
     curl_close($ch);
 
     if ($response === false) {
-        throw new RuntimeException("cURL error calling Gemini API: {$curlErr}");
+        throw new RuntimeException("cURL error calling Groq API: {$curlErr}");
     }
 
     if ($httpCode !== 200) {
-        throw new RuntimeException("Gemini API error (HTTP {$httpCode}): {$response}");
+        throw new RuntimeException("Groq API error (HTTP {$httpCode}): {$response}");
     }
 
     $data = json_decode($response, true);
-    return $data['candidates'][0]['content']['parts'][0]['text']
+    return $data['choices'][0]['message']['content']
         ?? 'Sorry, wala ko nasabat ang reply. Try again.';
 }
 
 try {
-    $reply = callGemini($contents);
+    $reply = callGroq($messages);
     incrementTodayUsage($pdo, $accountId, $guestKey, $today);
     $remaining = max(0, DAILY_QUESTION_LIMIT - ($usedToday + 1));
     echo json_encode(['reply' => $reply, 'remaining_today' => $remaining]);
