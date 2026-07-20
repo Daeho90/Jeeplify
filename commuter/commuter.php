@@ -565,6 +565,15 @@ if ($accountId) {
       box-shadow: 0 4px 14px rgba(0,0,0,.45);
     }
 
+
+    .jeep-btn-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
     /* Unread badge */
     #jeep-unread {
       position: absolute; top: -3px; right: -3px;
@@ -879,7 +888,7 @@ if ($accountId) {
      AI AGENT CHAT WIDGET
 ══════════════════════════════════════════════ -->
 <button id="jeep-chat-btn" aria-label="Ask Jeep AI assistant" title="Ask Jeep">
-  🚌
+  <img src="Modern.png" alt="" class="jeep-btn-icon">
   <span id="jeep-unread">1</span>
 </button>
 

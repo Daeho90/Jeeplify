@@ -8,23 +8,29 @@
  *
  * Requirements:
  *   - PHP 7.4+
- *   - Your existing DB connection file (adjust the require path below)
- *   - An Anthropic API key in your .env or config
+ *   - Your existing DB connection file
+ *   - ANTHROPIC_API_KEY set as an environment variable on Render
  */
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *'); // tighten in production
 
 // ── 1. Load your existing DB connection ──────────────────────────────────────
-require_once __DIR__ . '/../config/db.php'; // adjust path to your db.php
-// Expects a PDO instance in $pdo  OR  a mysqli link in $conn
-// If you use mysqli, swap the query helpers below accordingly.
+require_once __DIR__ . '/../db.php';
+// Expects a PDO instance in $pdo
 
 // ── 2. Your Anthropic API key ─────────────────────────────────────────────────
-// Best practice: store in .env and load with phpdotenv, or just define here for now
-define('ANTHROPIC_API_KEY', 'sk-ant-YOUR_KEY_HERE');
+// Set ANTHROPIC_API_KEY as an environment variable in the Render dashboard
+// (Service → Environment tab). Never hardcode real keys in source files.
+define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: '');
 define('ANTHROPIC_API_URL', 'https://api.anthropic.com/v1/messages');
 define('CLAUDE_MODEL',      'claude-sonnet-4-6');
+
+if (ANTHROPIC_API_KEY === '') {
+    http_response_code(500);
+    echo json_encode(['error' => 'Server misconfigured: ANTHROPIC_API_KEY is not set.']);
+    exit;
+}
 
 // ── 3. Validate input ─────────────────────────────────────────────────────────
 $input   = json_decode(file_get_contents('php://input'), true);
@@ -108,6 +114,11 @@ try {
 // ── 5. Build the system prompt ────────────────────────────────────────────────
 $now = date('Y-m-d H:i:s');
 
+// Encode JSON BEFORE building the heredoc, so the values actually interpolate.
+$activeDriversJson = json_encode($activeDrivers,  JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+$routesJson        = json_encode($routes,         JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+$bookingsJson      = json_encode($activeBookings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
 $systemPrompt = <<<PROMPT
 You are Jeep 🚌, a friendly AI assistant built into Jeeplify BCD — a real-time jeepney tracking app for Bacolod City, Philippines.
 
@@ -121,7 +132,7 @@ Your job is to help commuters:
 Current date and time: {$now}
 
 --- ACTIVE JEEPNEYS RIGHT NOW ---
-``` 
+```
 {$activeDriversJson}
 ```
 
@@ -144,18 +155,6 @@ Guidelines:
 - If you don't know something, say so clearly and suggest they check the map.
 - Keep replies short — commuters are usually on their phones on the go.
 PROMPT;
-
-// Inject live data as JSON into the prompt
-$activeDriversJson = json_encode($activeDrivers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-$routesJson        = json_encode($routes,        JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-$bookingsJson      = json_encode($activeBookings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-
-// Re-inject (heredoc evaluated before variables were set, so replace placeholders)
-$systemPrompt = str_replace(
-    ['{$activeDriversJson}', '{$routesJson}', '{$bookingsJson}'],
-    [$activeDriversJson,     $routesJson,     $bookingsJson],
-    $systemPrompt
-);
 
 // ── 6. Build the message array (supports multi-turn history) ──────────────────
 $messages = [];
@@ -197,7 +196,12 @@ function callClaude(string $systemPrompt, array $messages): string {
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr  = curl_error($ch);
     curl_close($ch);
+
+    if ($response === false) {
+        throw new RuntimeException("cURL error calling Anthropic API: {$curlErr}");
+    }
 
     if ($httpCode !== 200) {
         throw new RuntimeException("Anthropic API error (HTTP {$httpCode}): {$response}");
