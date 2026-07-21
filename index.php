@@ -6,7 +6,7 @@ require_once 'db.php';
 
 define('EMAILJS_SERVICE_ID',  'service_z7ohqbk');
 define('EMAILJS_TEMPLATE_ID', 'template_74vjeln');
-define('EMAILJS_PUBLIC_KEY',  'Enflg9cZZIYBsv26C');
+define('EMAILJS_PUBLIC_KEY',  'EnfIg9cZZIYBsv26C');
 define('EMAILJS_PRIVATE_KEY', getenv('EMAILJS_PRIVATE_KEY') ?: '');
 
 
