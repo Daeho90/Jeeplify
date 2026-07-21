@@ -537,32 +537,30 @@ if ($accountId) {
        on an otherwise disciplined dark interface.
     ══════════════════════════════════════════════ */
 
-    /* ── Floating trigger ── */
-    #jeep-chat-btn {
+#jeep-chat-btn {
       position: fixed;
-      bottom: calc(92px + var(--safe-b));
+      bottom: calc(140px + var(--safe-b));
       right: 20px;
       width: 52px; height: 52px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--amber), var(--amber-d));
+      background: transparent;
       border: none; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       font-size: 22px;
       z-index: 200;
-      box-shadow: 0 0 0 0 var(--amber-glow), 0 4px 20px rgba(245,158,11,.40);
+      box-shadow: none;
       animation: jeep-horn 3s ease-in-out infinite;
-      transition: transform .2s, box-shadow .2s;
+      transition: transform .2s;
     }
-    @keyframes jeep-horn {
+@keyframes jeep-horn {
       0%   { box-shadow: 0 0 0 0 var(--amber-glow),   0 4px 20px rgba(245,158,11,.40); }
       40%  { box-shadow: 0 0 0 10px rgba(245,158,11,0), 0 4px 20px rgba(245,158,11,.40); }
       100% { box-shadow: 0 0 0 0 var(--amber-glow),   0 4px 20px rgba(245,158,11,.40); }
     }
-    #jeep-chat-btn:hover  { transform: scale(1.08); }
+#jeep-chat-btn:hover  { transform: scale(1.08); }
     #jeep-chat-btn.open   {
-      background: linear-gradient(135deg, #1e2540, #131826);
+      background: transparent;
       animation: none;
-      box-shadow: 0 4px 14px rgba(0,0,0,.45);
     }
 
 
@@ -759,7 +757,7 @@ if ($accountId) {
       .top-bar { top: 18px; left: 18px; right: 18px; }
       .sheet { display: none !important; }
       .sheet-overlay { display: none !important; }
-      #jeep-chat-btn  { bottom: 32px; right: 32px; }
+      #jeep-chat-btn  { bottom: 100px; right: 32px; }
       #jeep-chat-panel {
         bottom: 98px; right: 32px;
         width: 340px; height: 480px;
