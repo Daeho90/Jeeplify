@@ -664,7 +664,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
           <p class="switch-link">Don't have an account? <span onclick="switchTo('register')">Register</span></p>
         </div>
 
-        <!-- ═══ REGISTER PANEL ═══ -->
+     <!-- ═══ REGISTER PANEL ═══ -->
         <div class="panel" id="registerPanel">
           <h1>Register</h1>
           <p class="subtitle">Create your account to get started.</p>
@@ -709,6 +709,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
                 <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
+          </div>
+
+          <div class="field" id="agreeField" style="margin-bottom:12px">
+            <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:11.5px;color:rgba(255,255,255,0.60);line-height:1.55">
+              <input type="checkbox" id="agreeCheck"
+                     style="margin-top:2px;flex-shrink:0;width:15px;height:15px;accent-color:#2563eb;cursor:pointer">
+              <span>I agree to the
+                <a href="privacy.php" target="_blank"
+                   style="color:#60a5fa;text-decoration:none"
+                   onmouseover="this.style.textDecoration='underline'"
+                   onmouseout="this.style.textDecoration='none'">Privacy Policy</a>
+              </span>
+            </label>
           </div>
 
           <button class="btn-primary" id="registerBtn" onclick="handleRegister(event)">
@@ -847,21 +860,32 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     const email     = document.getElementById('regEmail').value.trim();
     const password  = document.getElementById('regPassword').value;
     const password2 = document.getElementById('regPassword2').value;
-    if (!fullName)                     { showToast('Please enter your full name.');        fieldError('regName');      return; }
-    if (!email || !email.includes('@')) { showToast('Please enter a valid email.');        fieldError('regEmail');     return; }
-    if (password.length < 6)           { showToast('Password must be at least 6 chars.'); fieldError('regPassword');  return; }
-    if (password !== password2)        { showToast('Passwords do not match.');            fieldError('regPassword2'); return; }
-    const btn = document.getElementById('registerBtn');
-    if (btn.disabled) return;
-    doRipple(e, btn); setLoading(btn, true);
-    fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register', full_name:fullName, email, password, password2 }) })
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) showSuccess('Account created!', 'Welcome aboard! Redirecting…', data.redirect);
-        else         { showToast(data.message); setLoading(btn, false); }
-      })
-      .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
-  }
+   const agreed = document.getElementById('agreeCheck').checked;
+if (!agreed) {
+  showToast('Please agree to the Privacy Policy to continue.');
+  const af = document.getElementById('agreeField');
+  af.style.outline = '1px solid rgba(248,113,113,0.60)';
+  af.style.borderRadius = '8px';
+  document.getElementById('agreeCheck').addEventListener('change', () => {
+    af.style.outline = '';
+  }, { once: true });
+  return;
+}
+if (!fullName)                     { showToast('Please enter your full name.');        fieldError('regName');      return; }
+if (!email || !email.includes('@')) { showToast('Please enter a valid email.');        fieldError('regEmail');     return; }
+if (password.length < 6)           { showToast('Password must be at least 6 chars.'); fieldError('regPassword');  return; }
+if (password !== password2)        { showToast('Passwords do not match.');            fieldError('regPassword2'); return; }
+const btn = document.getElementById('registerBtn');
+if (btn.disabled) return;
+doRipple(e, btn); setLoading(btn, true);
+fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register', full_name:fullName, email, password, password2 }) })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) showSuccess('Account created!', 'Welcome aboard! Redirecting…', data.redirect);
+    else         { showToast(data.message); setLoading(btn, false); }
+  })
+  .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
+}
 
   function handleGoogle() {
     window.location.href = 'index.php?action=google_auth';
