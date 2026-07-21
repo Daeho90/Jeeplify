@@ -4,41 +4,52 @@ session_start();
 
 require_once 'db.php';
 
+define('EMAILJS_SERVICE_ID',  'service_z7ohqbk');
+define('EMAILJS_TEMPLATE_ID', 'template_74vjeln');
+define('EMAILJS_PUBLIC_KEY',  'Enflg9cZZIYBsv26C');
+define('EMAILJS_PRIVATE_KEY', getenv('EMAILJS_PRIVATE_KEY') ?: '');
 
-define('SMTP_FROM_EMAIL', 'onboarding@resend.dev');
-define('SMTP_FROM_NAME',  'Jeeplify BCD');
 
-function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $apiKey = getenv('RESEND_API_KEY');
+function sendResetEmailJS(string $toEmail, string $resetLink, ?string &$errorOut = null): bool {
+    if (EMAILJS_PRIVATE_KEY === '') {
+        $errorOut = 'Server misconfigured: EMAILJS_PRIVATE_KEY is not set.';
+        error_log($errorOut);
+        return false;
+    }
 
     $payload = json_encode([
-        'from'    => SMTP_FROM_NAME . ' <' . SMTP_FROM_EMAIL . '>',
-        'to'      => [$toEmail],
-        'subject' => $subject,
-        'text'    => $body,
+        'service_id'      => EMAILJS_SERVICE_ID,
+        'template_id'     => EMAILJS_TEMPLATE_ID,
+        'user_id'         => EMAILJS_PUBLIC_KEY,
+        'accessToken'     => EMAILJS_PRIVATE_KEY,
+        'template_params' => [
+            'email' => $toEmail,
+            'link'  => $resetLink,
+        ],
     ]);
 
-    $ch = curl_init('https://api.resend.com/emails');
+    $ch = curl_init('https://api.emailjs.com/api/v1.0/email/send');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $apiKey,
             'Content-Type: application/json',
         ],
+        CURLOPT_TIMEOUT        => 20,
     ]);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr  = curl_error($ch);
     curl_close($ch);
 
-    error_log('Resend response code: ' . $httpCode);
-    error_log('Resend response body: ' . $response);
+    error_log('EmailJS response code: ' . $httpCode);
+    error_log('EmailJS response body: ' . $response);
 
-    if ($httpCode === 200 || $httpCode === 201) return true;
+    if ($httpCode === 200) return true;
 
-    $errorOut = 'Resend error: HTTP ' . $httpCode . ' — ' . $response;
+    $errorOut = 'EmailJS error: HTTP ' . $httpCode . ' — ' . ($response ?: $curlErr);
     error_log($errorOut);
     return false;
 }
@@ -187,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $body    = "Hello,\n\nClick the link below to reset your password (expires in 1 hour):\n\n$resetLink\n\nIf you did not request this, you can safely ignore this email.\n\n— Jeeplify Team";
 
             $mailError = null;
-            $sent = sendMailSMTP($email, $subject, $body, $mailError);
+            $sent = sendResetEmailJS($email, $resetLink, $mailError);
 
             if (!$sent) {
                 error_log('Forgot password mail error: ' . $mailError);
