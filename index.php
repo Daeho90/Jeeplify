@@ -716,10 +716,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
               <input type="checkbox" id="agreeCheck"
                      style="margin-top:2px;flex-shrink:0;width:15px;height:15px;accent-color:#2563eb;cursor:pointer">
               <span>I agree to the
-                <a href="privacy.php" target="_blank"
-                   style="color:#60a5fa;text-decoration:none"
-                   onmouseover="this.style.textDecoration='underline'"
-                   onmouseout="this.style.textDecoration='none'">Privacy Policy</a>
+                <a href="#" onclick="openPrivacyModal();return false;" style="color:#60a5fa;text-decoration:none"
+                  onmouseover="this.style.textDecoration='underline'"
+                  onmouseout="this.style.textDecoration='none'">Privacy Policy</a>
               </span>
             </label>
           </div>
@@ -773,6 +772,70 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       <h3>Check your inbox</h3>
       <p>We've sent a reset link to <strong id="sentEmailDisplay"></strong>. It expires in 1 hour.</p>
       <button class="btn-back" onclick="closeForgotModal()">Back to Login</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ PRIVACY POLICY MODAL ═══ -->
+<div class="modal-backdrop" id="privacyBackdrop" onclick="handlePrivacyBackdropClick(event)">
+  <div class="modal" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle"
+       style="max-width:480px;max-height:80vh;display:flex;flex-direction:column;">
+
+    <div class="modal-header" style="flex-shrink:0;">
+      <h2 id="privacyTitle">Privacy Policy</h2>
+      <button class="modal-close" onclick="closePrivacyModal()" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div style="overflow-y:auto;flex:1;padding-right:4px;">
+      <p style="font-size:11px;color:rgba(255,255,255,0.40);margin-bottom:14px;">Last updated: July 2025</p>
+
+      <p style="font-size:12px;color:rgba(255,255,255,0.70);line-height:1.7;margin-bottom:14px;">
+        Jeeplify ("we", "our", or "us") is a jeepney tracking and commuter information service for Bacolod City.
+        This policy explains what data we collect and how we use it.
+      </p>
+
+      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">What we collect</p>
+      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
+        <li><strong style="color:rgba(255,255,255,0.85);">Account info</strong> — your name and email address when you register.</li>
+        <li><strong style="color:rgba(255,255,255,0.85);">Driver GPS location</strong> — real-time coordinates broadcast only while a driver is on an active trip.</li>
+        <li><strong style="color:rgba(255,255,255,0.85);">Booking and schedule data</strong> — routes and trip records associated with your account.</li>
+        <li><strong style="color:rgba(255,255,255,0.85);">Usage data</strong> — basic logs (page visits, errors) for debugging purposes.</li>
+      </ul>
+
+      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">How we use it</p>
+      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
+        <li>To operate the jeepney tracking map and commuter features.</li>
+        <li>To manage driver and operator accounts.</li>
+        <li>To send password reset emails — no marketing emails.</li>
+        <li>To improve the app through anonymized usage analysis.</li>
+      </ul>
+
+      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">What we don't do</p>
+      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
+        <li>We do not sell your data to anyone.</li>
+        <li>We do not share your data with third parties except services that run this app (hosting, email delivery).</li>
+        <li>Driver GPS is not stored — it is broadcast live and discarded.</li>
+      </ul>
+
+      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">Data retention</p>
+      <p style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.7;margin-bottom:14px;">
+        Your account data is kept as long as your account exists. You may request deletion by contacting us.
+      </p>
+
+      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">Contact</p>
+      <p style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.7;margin-bottom:6px;">
+        For questions or data requests, reach us at
+        <a href="mailto:support@jeeplify.onrender.com" style="color:#60a5fa;">support@jeeplify.onrender.com</a>.
+      </p>
+    </div>
+
+    <div style="flex-shrink:0;padding-top:16px;border-top:1px solid rgba(255,255,255,0.10);margin-top:12px;">
+      <button class="btn-primary" style="margin-top:0;" onclick="closePrivacyModal();document.getElementById('agreeCheck').checked=true;document.getElementById('agreeField').style.outline='';">
+        <span class="btn-label">I Understand</span>
+      </button>
     </div>
 
   </div>
@@ -932,12 +995,23 @@ fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeForgotModal(); return; }
+    if (e.key === 'Escape') { closeForgotModal(); closePrivacyModal(); return; }
     if (e.key !== 'Enter') return;
     if (document.getElementById('forgotBackdrop').classList.contains('open')) { handleForgot({ clientX:0, clientY:0 }); return; }
     if (current === 'login')    handleLogin({ clientX:0, clientY:0 });
     if (current === 'register') handleRegister({ clientX:0, clientY:0 });
   });
+
+  function openPrivacyModal() {
+  document.getElementById('privacyBackdrop').classList.add('open');
+}
+function closePrivacyModal() {
+  document.getElementById('privacyBackdrop').classList.remove('open');
+}
+function handlePrivacyBackdropClick(e) {
+  if (e.target === document.getElementById('privacyBackdrop')) closePrivacyModal();
+}
+
 </script>
 </body>
 </html>
