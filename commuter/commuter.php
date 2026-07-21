@@ -888,13 +888,15 @@ if ($accountId) {
      AI AGENT CHAT WIDGET
 ══════════════════════════════════════════════ -->
 <button id="jeep-chat-btn" aria-label="Ask Jeep AI assistant" title="Ask Jeep">
-  <img src="fav.png" alt="" class="jeep-btn-icon">
+  <img src="ai.png" alt="" class="jeep-btn-icon">
   <span id="jeep-unread">1</span>
 </button>
 
 <div id="jeep-chat-panel" role="dialog" aria-label="Jeep AI Assistant">
   <div class="jc-header">
-    <div class="jc-avatar">🚌</div>
+    <div class="jc-avatar" style="background:none;overflow:hidden;">
+  <img src="ai.png" style="width:34px;height:34px;object-fit:contain;" alt="">
+</div>
     <div class="jc-header-info">
       <div class="jc-name">Jeep</div>
       <div class="jc-status">Online · Bacolod City</div>
