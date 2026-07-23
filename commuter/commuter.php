@@ -1345,10 +1345,11 @@ function buildPopup(d) {
        </div>` : '';
   return `
     <div style="font-family:'Montserrat',sans-serif;padding:12px 14px;min-width:200px;">
-      <div style="display:flex;align-items:center;margin-bottom:8px;">
-        <span style="font-size:15px;font-weight:800;color:#f9fafb;letter-spacing:-.3px;">🚌 ${d.unit_code || '—'}</span>
-        ${staleBadge}
-      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+  <img src="/commuter/Modern.png" alt="" style="width:18px;height:18px;object-fit:contain;flex-shrink:0;">
+  <span style="font-size:15px;font-weight:800;color:#f9fafb;letter-spacing:-.3px;">${d.unit_code || '—'}</span>
+  ${staleBadge}
+</div>
       <div style="margin-bottom:10px;">${tripStatusBadge(d.display_status)}</div>
       <div style="display:flex;flex-direction:column;gap:0;">
         ${d.route_name ? `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;"><span style="font-size:10px;color:#9ca3af;">Route</span><span style="font-size:11px;font-weight:700;color:#e8edf5;text-align:right;max-width:150px;">${d.route_name}</span></div>` : ''}
