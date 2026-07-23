@@ -122,6 +122,6 @@ try {
 } catch (PDOException $e) {
     error_log('update_location error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['ok' => false, 'message' => $e->getMessage()]); // temp debug
+    echo json_encode(['ok' => false, 'message' => 'Server error']);
     exit;
 }
