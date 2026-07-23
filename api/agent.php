@@ -121,9 +121,9 @@ function getActiveDrivers(PDO $pdo): array {
             dl.updated_at
         FROM driver_jeepney dj
         JOIN jeepneys j          ON j.id = dj.jeepney_id
-        JOIN driver_locations dl ON dl.account_id = dj.driver_id
-        LEFT JOIN driver_profiles dp ON dp.account_id = dj.driver_id
-        LEFT JOIN routes r           ON r.id = j.route_id
+        JOIN driver_profiles dp  ON dp.id = dj.driver_id
+        JOIN driver_locations dl ON dl.account_id = dp.account_id
+        LEFT JOIN routes r       ON r.id = j.route_id
         WHERE dl.updated_at >= NOW() - INTERVAL 10 MINUTE
         ORDER BY dl.updated_at DESC
     ");
