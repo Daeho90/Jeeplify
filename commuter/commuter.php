@@ -1346,7 +1346,7 @@ function buildPopup(d) {
   return `
     <div style="font-family:'Montserrat',sans-serif;padding:12px 14px;min-width:200px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-  <img src="/commuter/Modern.png" alt="" style="width:18px;height:18px;object-fit:contain;flex-shrink:0;">
+  <img src="/commuter/Modern.png" alt="" style="width:14px;height:14px;object-fit:contain;flex-shrink:0;">
   <span style="font-size:15px;font-weight:800;color:#f9fafb;letter-spacing:-.3px;">${d.unit_code || '—'}</span>
   ${staleBadge}
 </div>
