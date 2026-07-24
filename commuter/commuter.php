@@ -1311,7 +1311,7 @@ function makeJeepIcon(direction, stale, status) {
         ${!stale ? `<span style="position:absolute;top:50%;left:50%;width:28px;height:28px;margin-top:-14px;margin-left:-14px;border-radius:50%;background:${dotColor};opacity:.6;animation:${animName} 2s ease-out infinite;pointer-events:none;display:block;"></span>` : ''}
         <img src="${imgUrl}" width="40" height="40" style="position:absolute;top:0;left:0;width:40px;height:40px;object-fit:contain;transform:${flip};transform-origin:center;opacity:${opacity};${glow}display:block;">
       </div>`,
-    iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-24]
+    iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]
   });
 }
 
@@ -1461,7 +1461,7 @@ window.addEventListener('resize', () => map.invalidateSize());
     'Pila ang pamasahe?',
     'I-book ang jeep',
   ];
-  const GREETING = `Kumusta! Ako si Jeep 👋\nAno ang imo destination? Buligan ta ka makahanap sang husto nga ruta sa Bacolod.`;
+  const GREETING = `Kumusta! Ako si Jeep 👋\nAno ang imo destination? Buligan ta ka makahanap sang gusto nga ruta sa Bacolod.`;
 
   let history   = [];
   let isLoading = false;
