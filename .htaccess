@@ -1,0 +1,8 @@
+# Deny access to version control and dev-only files, even if they end up
+# on the server. This is a safety net on top of .dockerignore.
+
+RedirectMatch 404 /\.git
+
+<FilesMatch "^(\.git.*|\.env|composer\.json|composer\.lock|test\.html|ca\.pem)$">
+    Require all denied
+</FilesMatch>
