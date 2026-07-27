@@ -1163,7 +1163,7 @@ function closeRouteLogs(silent) {
 }
 
 function fetchRouteLogs(unitId) {
-  fetch('actions/route_logs.php?unit_id=' + encodeURIComponent(unitId))
+  fetch('actions/api.php?do=route_logs&unit_id=' + encodeURIComponent(unitId))
     .then(r => r.json())
     .then(res => {
       if (!res.success) {
@@ -1232,7 +1232,7 @@ function declineBooking(btn, id) {
 }
 function bookingAction(btn, id, action) {
   btn.disabled = true;
-  fetch('actions/booking_action.php', {
+  fetch('actions/api.php?do=booking_action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, action })
@@ -1286,7 +1286,7 @@ function submitReschedule() {
   const btn = document.getElementById('reschedSubmitBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  fetch('actions/reschedule_booking.php', {
+  fetch('actions/api.php?do=reschedule_booking', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: _rescheduleId, booking_date: date, booking_time: time })
@@ -1344,7 +1344,7 @@ function saveSchedule() {
   const freq  = document.getElementById('editFreq').value;
   if (!first || !last || !freq) { showToast('Fill in all fields','error'); return; }
 
-  fetch('actions/schedule_action.php', {
+  fetch('actions/api.php?do=schedule_action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, first_trip: first, last_trip: last, frequency_min: parseInt(freq) })
@@ -1422,7 +1422,7 @@ function saveEditDriver() {
 
   if (!name) { showToast('Full name is required', 'error'); return; }
 
-  fetch('actions/edit_driver.php', {
+  fetch('actions/api.php?do=edit_driver', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, full_name: name, license_number: license, unit_id: jeep, route_id: route, password: newPass })
@@ -1464,7 +1464,7 @@ function createDriver() {
     showToast('Please fill in all fields', 'error'); return;
   }
 
-  fetch('actions/create_driver.php', {
+  fetch('actions/api.php?do=create_driver', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ first_name: first, last_name: last, license, unit_id: jeep, route_id: route, username: user, password: pass })
@@ -1600,7 +1600,7 @@ function createSchedule() {
   if (!driverId) { showToast('Please select a driver', 'error'); return; }
   if (!first || !last || !freq) { showToast('Fill in all time fields', 'error'); return; }
 
-  fetch('actions/create_schedule.php', {
+  fetch('actions/api.php?do=create_schedule', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ driver_id: driverId, first_trip: first, last_trip: last, frequency_min: parseInt(freq) })
@@ -1687,7 +1687,7 @@ function submitDispatch() {
   const btn = document.getElementById('dispatchSubmitBtn');
   btn.disabled = true; btn.textContent = 'Dispatching…';
 
-  fetch('actions/trip_action.php', {
+  fetch('actions/api.php?do=trip_action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ unit_id: _dispatchUnitId, route_id: parseInt(routeId), departure })
@@ -1720,7 +1720,7 @@ function confirmRemoveDriver(id, name) {
 }
 
 function removeDriver(id) {
-  fetch('actions/remove_driver.php', {
+  fetch('actions/api.php?do=remove_driver', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ driver_id: id })
