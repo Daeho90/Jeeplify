@@ -2,7 +2,7 @@
 // ════════════════════════════════════════════════════════════
 //  JEEPLIFY BCD — commuter/api.php
 // ════════════════════════════════════════════════════════════
-session_start();
+require_once '../session_init.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 

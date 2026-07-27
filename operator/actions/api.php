@@ -9,7 +9,7 @@
 //   - POST endpoints send their usual JSON body unchanged.
 //   - route_logs is a GET endpoint: actions/api.php?do=route_logs&unit_id=123
 
-session_start();
+require_once '../../session_init.php';
 header('Content-Type: application/json');
 
 if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'operator') {

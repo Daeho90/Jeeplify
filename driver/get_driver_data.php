@@ -3,7 +3,7 @@
 //  JEEPLIFY BCD — driver/get_driver_data.php
 // ════════════════════════════════════════════════════════════
 
-session_start();
+require_once '../session_init.php';
 header('Content-Type: application/json');
 
 // ── AUTH GUARD ───────────────────────────────────────────────

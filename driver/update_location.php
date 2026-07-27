@@ -5,7 +5,7 @@
 //  and upserts driver_locations
 //  Called every N seconds from the dashboard JS
 // ════════════════════════════════════════════════════════════
-session_start();
+require_once '../session_init.php';
 header('Content-Type: application/json');
 
 // ── AUTH GUARD ───────────────────────────────────────────────
@@ -123,5 +123,4 @@ try {
     error_log('update_location error: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['ok' => false, 'message' => 'Server error']);
-    exit;
 }

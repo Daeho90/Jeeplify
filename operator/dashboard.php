@@ -2,7 +2,7 @@
 // ════════════════════════════════════════════════════════════
 //  JEEPLIFY BCD — operator/dashboard.php  (FIXED)
 // ════════════════════════════════════════════════════════════
-session_start();
+require_once '../session_init.php';
 
 // ── AUTH GUARD ───────────────────────────────────────────────
 if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'operator') {

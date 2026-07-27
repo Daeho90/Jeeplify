@@ -1,14 +1,15 @@
 <?php
 
-session_start();
+require_once '../session_init.php';
 
 require_once '../db.php';
 
 define('COMMUTER_REDIRECT', '../commuter/commuter.php');
 
-define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID'));
-define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET'));
-define('GOOGLE_REDIRECT_URI',  'https://jeeplify.onrender.com/auth/google_callback.php');
+// ── GOOGLE OAuth CONFIG ─────────────────────────────────────
+define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+define('GOOGLE_REDIRECT_URI', getenv('GOOGLE_REDIRECT_URI') ?: '');
 
 // ── HELPERS ─────────────────────────────────────────────────
 function bail(string $msg): void {

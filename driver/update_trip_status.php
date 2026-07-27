@@ -4,7 +4,7 @@
 //  POST (form-encoded): trip_id, status
 //  Valid statuses: on_route, traffic, maintenance, complete
 // ════════════════════════════════════════════════════════════
-session_start();
+require_once '../session_init.php';
 header('Content-Type: application/json');
 
 if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'driver') {

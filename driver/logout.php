@@ -3,7 +3,7 @@
 //  JEEPLIFY BCD — logout.php
 //  Destroys the session and sends the user back to login
 // ════════════════════════════════════════════════════════════
-session_start();
+require_once '../session_init.php';
 session_unset();
 session_destroy();
 // Remove the session cookie

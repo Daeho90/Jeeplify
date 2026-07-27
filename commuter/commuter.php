@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once '../session_init.php';
 require_once '../db.php';
 $accountId = $_SESSION['account_id'] ?? null;
 $isGuest   = isset($_GET['guest']) && $_GET['guest'] === '1';

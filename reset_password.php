@@ -6,7 +6,7 @@
 //  POST             → validate & update password
 // ════════════════════════════════════════════════════════════
 
-session_start();
+require_once 'session_init.php';
 require_once 'db.php';
 
 function jsonOut(bool $ok, string $msg, array $extra = []): void {
