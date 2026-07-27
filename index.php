@@ -3,55 +3,55 @@
 session_start();
 
 require_once 'db.php';
+require_once 'rate_limit.php';
+require_once 'PHPMailer/src/Exception.php';
+require_once 'PHPMailer/src/PHPMailer.php';
+require_once 'PHPMailer/src/SMTP.php';
 
-define('EMAILJS_SERVICE_ID',  'service_z7ohqbk');
-define('EMAILJS_TEMPLATE_ID', 'template_74vjeln');
-define('EMAILJS_PUBLIC_KEY',  'EnfIg9cZZIYBsv26C');
-define('EMAILJS_PRIVATE_KEY', getenv('EMAILJS_PRIVATE_KEY') ?: '');
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
+// ── SMTP CONFIG (Gmail) ──────────────────────────────────────
+// 1. Use a Gmail address you control.
+// 2. Turn on 2-Step Verification on that Google account.
+// 3. Create an "App Password": https://myaccount.google.com/apppasswords
+//    (choose app "Mail", device "Other" -> name it "Jeeplify") and paste
+//    the 16-character password below (no spaces).
+define('SMTP_HOST',      'smtp.gmail.com');
+define('SMTP_PORT',      587);
+define('SMTP_USERNAME',  getenv('SMTP_USERNAME') ?: '');
+define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD') ?: '');                // TODO: 16-char app password
+define('SMTP_FROM',      SMTP_USERNAME);
+define('SMTP_FROM_NAME', 'Jeeplify BCD');
 
-function sendResetEmailJS(string $toEmail, string $resetLink, ?string &$errorOut = null): bool {
-    if (EMAILJS_PRIVATE_KEY === '') {
-        $errorOut = 'Server misconfigured: EMAILJS_PRIVATE_KEY is not set.';
-        error_log($errorOut);
+/**
+ * Send an email via SMTP (Gmail). Returns true on success, false on failure.
+ * On failure, $errorOut is populated with a human-readable reason.
+ */
+function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
+    $mail = new PHPMailer(true);
+    try {
+        $mail->isSMTP();
+        $mail->Host       = SMTP_HOST;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = SMTP_USERNAME;
+        $mail->Password   = SMTP_PASSWORD;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = SMTP_PORT;
+
+        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
+        $mail->addAddress($toEmail);
+
+        $mail->isHTML(false);
+        $mail->Subject = $subject;
+        $mail->Body    = $body;
+
+        $mail->send();
+        return true;
+    } catch (PHPMailerException $e) {
+        $errorOut = $mail->ErrorInfo ?: $e->getMessage();
         return false;
     }
-
-    $payload = json_encode([
-        'service_id'      => EMAILJS_SERVICE_ID,
-        'template_id'     => EMAILJS_TEMPLATE_ID,
-        'user_id'         => EMAILJS_PUBLIC_KEY,
-        'accessToken'     => EMAILJS_PRIVATE_KEY,
-        'template_params' => [
-            'email' => $toEmail,
-            'link'  => $resetLink,
-        ],
-    ]);
-
-    $ch = curl_init('https://api.emailjs.com/api/v1.0/email/send');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-        ],
-        CURLOPT_TIMEOUT        => 20,
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr  = curl_error($ch);
-    curl_close($ch);
-
-    error_log('EmailJS response code: ' . $httpCode);
-    error_log('EmailJS response body: ' . $response);
-
-    if ($httpCode === 200) return true;
-
-    $errorOut = 'EmailJS error: HTTP ' . $httpCode . ' — ' . ($response ?: $curlErr);
-    error_log($errorOut);
-    return false;
 }
 
 const ROLE_REDIRECTS = [
@@ -60,10 +60,11 @@ const ROLE_REDIRECTS = [
     'user'     => 'commuter/commuter.php',
 ];
 
-define('GOOGLE_CLIENT_ID',     getenv('GOOGLE_CLIENT_ID'));
-define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET'));
-define('GOOGLE_REDIRECT_URI',  'https://jeeplify.onrender.com/auth/google_callback.php');
-
+// ── GOOGLE OAuth CONFIG ─────────────────────────────────────
+define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+define('GOOGLE_REDIRECT_URI', getenv('GOOGLE_REDIRECT_URI') ?: '');
+// ── HELPERS ──────────────────────────────────────────────────
 function jsonOut(bool $ok, string $msg, array $extra = []): void {
     header('Content-Type: application/json');
     echo json_encode(array_merge(['ok' => $ok, 'message' => $msg], $extra));
@@ -83,6 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$email || !$password) jsonOut(false, 'Email and password are required.');
 
+        $rlId = 'ip:' . clientIp() . '|email:' . strtolower($email);
+        if (isRateLimited($pdo, $rlId, 'login', 5, 15)) {
+            jsonOut(false, 'Too many login attempts. Please try again in 15 minutes.');
+        }
+
         try {
             $db   = $pdo;
             $stmt = $db->prepare(
@@ -94,8 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$email]);
             $acc = $stmt->fetch();
 
-            if (!$acc || !password_verify($password, $acc['password_hash']))
+            if (!$acc || !password_verify($password, $acc['password_hash'])) {
+                recordAttempt($pdo, $rlId, 'login', 15);
                 jsonOut(false, 'Invalid email or password.');
+            }
 
             if (!$acc['is_active'])
                 jsonOut(false, 'Your account has been deactivated. Contact support.');
@@ -103,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare('UPDATE accounts SET last_login_at = NOW() WHERE id = ?')
                ->execute([$acc['id']]);
 
+            clearRateLimit($pdo, $rlId, 'login');
             session_regenerate_id(true);
             $_SESSION['account_id'] = $acc['id'];
             $_SESSION['email']      = $acc['email'];
@@ -130,6 +139,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL))   jsonOut(false, 'Enter a valid email address.');
         if (strlen($password) < 6)                        jsonOut(false, 'Password must be at least 6 characters.');
         if ($password !== $password2)                     jsonOut(false, 'Passwords do not match.');
+
+        $rlId = 'ip:' . clientIp();
+        if (isRateLimited($pdo, $rlId, 'register', 5, 60)) {
+            jsonOut(false, 'Too many registration attempts. Please try again later.');
+        }
+        recordAttempt($pdo, $rlId, 'register', 60);
 
         try {
             $db  = $pdo;
@@ -176,6 +191,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL))
             jsonOut(false, 'Please enter a valid email address.');
 
+        $rlId = 'ip:' . clientIp() . '|email:' . strtolower($email);
+        if (isRateLimited($pdo, $rlId, 'forgot_password', 3, 60)) {
+            // Same generic message as success, so this doesn't leak whether
+            // the email exists or reveal that a limit was hit.
+            jsonOut(true, 'If that email exists, a reset link has been sent.');
+        }
+        recordAttempt($pdo, $rlId, 'forgot_password', 60);
+
         try {
             $db   = $pdo;
             $stmt = $db->prepare('SELECT id FROM accounts WHERE email = ? LIMIT 1');
@@ -192,24 +215,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare('INSERT INTO password_resets (account_id, token, expires_at) VALUES (?,?,?)')
                ->execute([$acc['id'], $token, $expiresAt]);
 
-            $resetLink = 'https://jeeplify.onrender.com/reset_password.php?token=' . $token;
+            $resetLink = 'https://bcd-jeepney.kesug.com/reset_password.php?token=' . $token;
 
             $subject = 'Reset Your Jeeplify Password';
             $body    = "Hello,\n\nClick the link below to reset your password (expires in 1 hour):\n\n$resetLink\n\nIf you did not request this, you can safely ignore this email.\n\n— Jeeplify Team";
 
             $mailError = null;
-            $sent = sendResetEmailJS($email, $resetLink, $mailError);
+            $sent = sendMailSMTP($email, $subject, $body, $mailError);
 
             if (!$sent) {
                 error_log('Forgot password mail error: ' . $mailError);
-                jsonOut(false, $mailError ?: 'Unknown mail error');
+                // TEMP DEBUG — remove this "debug" key once email sending works
+                jsonOut(false, 'Could not send the reset email right now. Please try again later.', ['debug' => $mailError]);
             }
 
             jsonOut(true, 'If that email exists, a reset link has been sent.');
 
         } catch (PDOException $e) {
             error_log('Forgot password error: ' . $e->getMessage());
-            jsonOut(false, 'DB error: ' . $e->getMessage());
+            jsonOut(false, 'Server error. Please try again.');
         }
     }
 
@@ -222,13 +246,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     $_SESSION['oauth_state'] = $state;
 
     $params = http_build_query([
-        'client_id'     => GOOGLE_CLIENT_ID,
-        'redirect_uri'  => GOOGLE_REDIRECT_URI,
-        'response_type' => 'code',
-        'scope'         => 'openid email profile',
-        'state'         => $state,
-        'access_type'   => 'online',
-        'prompt'        => 'select_account',
+        'client_id'             => GOOGLE_CLIENT_ID,
+        'redirect_uri'          => GOOGLE_REDIRECT_URI,
+        'response_type'         => 'code',
+        'scope'                 => 'openid email profile',
+        'state'                 => $state,
+        'access_type'           => 'online',
+        'prompt'                => 'select_account',
     ]);
 
     header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . $params);
@@ -253,6 +277,43 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       background:#0b1220;
     }
     body { position:relative; color:#fff; }
+    body.splash-active { overflow:hidden; height:100vh; }
+
+    /* ── SPLASH / LOADING SCREEN ── */
+    #splashScreen {
+      position:fixed; inset:0; z-index:9999;
+      background:#000;
+      display:flex; align-items:center; justify-content:center;
+      overflow:hidden;
+      opacity:1;
+      transition:opacity .6s ease;
+    }
+    #splashScreen.fade-out { opacity:0; pointer-events:none; }
+    #splashScreen.gone { display:none; }
+    #splashVideo {
+      display:block;
+      width:100%; height:100%;
+      min-width:100%; min-height:100%;
+      object-fit:cover;
+      object-position:center center;
+    }
+    .splash-loader {
+      position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+      width:140px; height:3px; border-radius:3px;
+      background:rgba(255,255,255,0.18);
+      overflow:hidden;
+      z-index:2;
+    }
+    .splash-loader-bar {
+      height:100%; width:0%;
+      background:#60a5fa;
+      border-radius:3px;
+      transition:width .1s linear;
+    }
+
+    @media (max-width: 480px) {
+      .splash-loader { bottom:24px; width:110px; }
+    }
 
     .hero-bg { position:fixed; inset:0; z-index:0; }
     .hero-bg img {
@@ -410,6 +471,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     }
     .divider span { font-size:10px; color:rgba(255,255,255,0.35); white-space:nowrap; }
 
+    /* ── GOOGLE BUTTON ── */
     .btn-google {
       width:100%; height:42px;
       border:1px solid rgba(255,255,255,0.20);
@@ -498,6 +560,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     .toast.success { background:rgba(34,197,94,0.96);   box-shadow:0 4px 20px rgba(34,197,94,0.35); }
     .toast.show    { transform:translateX(-50%) translateY(0); opacity:1; }
 
+    /* ── FORGOT PASSWORD MODAL ── */
     .modal-backdrop {
       position:fixed; inset:0; z-index:100;
       background:rgba(8,12,25,0.72);
@@ -571,6 +634,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.30);
     }
 
+    /* ── RESPONSIVE ── */
     @media (max-width: 900px) {
       .hero-overlay { background:linear-gradient(180deg, rgba(8,12,25,.55) 0%, rgba(8,12,25,.62) 100%); }
       .page { justify-content:center; padding:24px 20px; align-items:center; }
@@ -591,7 +655,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     }
   </style>
 </head>
-<body>
+<body class="splash-active">
+
+<!-- ═══ SPLASH / LOADING SCREEN ═══ -->
+<div id="splashScreen">
+  <video id="splashVideo" autoplay muted playsinline webkit-playsinline preload="auto">
+    <source src="Animation.mp4" type="video/mp4">
+  </video>
+  <div class="splash-loader"><div class="splash-loader-bar" id="splashLoaderBar"></div></div>
+</div>
 
 <div class="hero-bg">
   <img src="Modern.jpg" alt="Bacolod City">
@@ -645,7 +717,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
 
           <div class="divider"><span>or continue with</span></div>
 
+          <!-- Google Login Button -->
           <button class="btn-google" onclick="handleGoogle()">
+            <!-- Official Google "G" logo SVG -->
             <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
               <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
               <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -664,7 +738,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
           <p class="switch-link">Don't have an account? <span onclick="switchTo('register')">Register</span></p>
         </div>
 
-     <!-- ═══ REGISTER PANEL ═══ -->
+        <!-- ═══ REGISTER PANEL ═══ -->
         <div class="panel" id="registerPanel">
           <h1>Register</h1>
           <p class="subtitle">Create your account to get started.</p>
@@ -709,18 +783,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
                 <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
-          </div>
-
-          <div class="field" id="agreeField" style="margin-bottom:12px">
-            <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:11.5px;color:rgba(255,255,255,0.60);line-height:1.55">
-              <input type="checkbox" id="agreeCheck"
-                     style="margin-top:2px;flex-shrink:0;width:15px;height:15px;accent-color:#2563eb;cursor:pointer">
-              <span>I agree to the
-                <a href="#" onclick="openPrivacyModal();return false;" style="color:#60a5fa;text-decoration:none"
-                  onmouseover="this.style.textDecoration='underline'"
-                  onmouseout="this.style.textDecoration='none'">Privacy Policy</a>
-              </span>
-            </label>
           </div>
 
           <button class="btn-primary" id="registerBtn" onclick="handleRegister(event)">
@@ -777,73 +839,51 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
   </div>
 </div>
 
-<!-- ═══ PRIVACY POLICY MODAL ═══ -->
-<div class="modal-backdrop" id="privacyBackdrop" onclick="handlePrivacyBackdropClick(event)">
-  <div class="modal" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle"
-       style="max-width:480px;max-height:80vh;display:flex;flex-direction:column;">
-
-    <div class="modal-header" style="flex-shrink:0;">
-      <h2 id="privacyTitle">Privacy Policy</h2>
-      <button class="modal-close" onclick="closePrivacyModal()" aria-label="Close">
-        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-
-    <div style="overflow-y:auto;flex:1;padding-right:4px;">
-      <p style="font-size:11px;color:rgba(255,255,255,0.40);margin-bottom:14px;">Last updated: July 2025</p>
-
-      <p style="font-size:12px;color:rgba(255,255,255,0.70);line-height:1.7;margin-bottom:14px;">
-        Jeeplify ("we", "our", or "us") is a jeepney tracking and commuter information service for Bacolod City.
-        This policy explains what data we collect and how we use it.
-      </p>
-
-      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">What we collect</p>
-      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
-        <li><strong style="color:rgba(255,255,255,0.85);">Account info</strong> — your name and email address when you register.</li>
-        <li><strong style="color:rgba(255,255,255,0.85);">Driver GPS location</strong> — real-time coordinates broadcast only while a driver is on an active trip.</li>
-        <li><strong style="color:rgba(255,255,255,0.85);">Booking and schedule data</strong> — routes and trip records associated with your account.</li>
-        <li><strong style="color:rgba(255,255,255,0.85);">Usage data</strong> — basic logs (page visits, errors) for debugging purposes.</li>
-      </ul>
-
-      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">How we use it</p>
-      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
-        <li>To operate the jeepney tracking map and commuter features.</li>
-        <li>To manage driver and operator accounts.</li>
-        <li>To send password reset emails — no marketing emails.</li>
-        <li>To improve the app through anonymized usage analysis.</li>
-      </ul>
-
-      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">What we don't do</p>
-      <ul style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.8;margin-bottom:14px;padding-left:16px;">
-        <li>We do not sell your data to anyone.</li>
-        <li>We do not share your data with third parties except services that run this app (hosting, email delivery).</li>
-        <li>Driver GPS is not stored — it is broadcast live and discarded.</li>
-      </ul>
-
-      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">Data retention</p>
-      <p style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.7;margin-bottom:14px;">
-        Your account data is kept as long as your account exists. You may request deletion by contacting us.
-      </p>
-
-      <p style="font-size:12.5px;font-weight:700;color:#fff;margin-bottom:6px;">Contact</p>
-      <p style="font-size:12px;color:rgba(255,255,255,0.65);line-height:1.7;margin-bottom:6px;">
-        For questions or data requests, reach us at
-        <a href="mailto:support@jeeplify.onrender.com" style="color:#60a5fa;">support@jeeplify.onrender.com</a>.
-      </p>
-    </div>
-
-    <div style="flex-shrink:0;padding-top:16px;border-top:1px solid rgba(255,255,255,0.10);margin-top:12px;">
-      <button class="btn-primary" style="margin-top:0;" onclick="closePrivacyModal();document.getElementById('agreeCheck').checked=true;document.getElementById('agreeField').style.outline='';">
-        <span class="btn-label">I Understand</span>
-      </button>
-    </div>
-
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
+  // ── SPLASH SCREEN ─────────────────────────────────────────
+  (function () {
+    const splash     = document.getElementById('splashScreen');
+    const video      = document.getElementById('splashVideo');
+    const loaderBar  = document.getElementById('splashLoaderBar');
+    const FALLBACK_MS = 6500; // safety timeout in case the video can't load/play
+    let dismissed = false;
+
+    // Skip the splash entirely if we've already shown it this tab/session
+    // (e.g. user just logged out and got redirected back here)
+    if (sessionStorage.getItem('splashShown')) {
+      splash.classList.add('gone');
+      document.body.classList.remove('splash-active');
+      return; // don't touch the <video> at all, so it never starts playing
+    }
+    sessionStorage.setItem('splashShown', '1');
+
+    function dismissSplash() {
+      if (dismissed) return;
+      dismissed = true;
+      splash.classList.add('fade-out');
+      document.body.classList.remove('splash-active');
+      setTimeout(() => splash.classList.add('gone'), 650);
+    }
+
+    video.addEventListener('ended', dismissSplash);
+    video.addEventListener('error', dismissSplash);
+
+    // Drive the little progress bar off actual video playback time
+    video.addEventListener('timeupdate', () => {
+      if (video.duration) {
+        loaderBar.style.width = Math.min(100, (video.currentTime / video.duration) * 100) + '%';
+      }
+    });
+
+    // Safety net: some mobile browsers can block autoplay entirely
+    setTimeout(dismissSplash, FALLBACK_MS);
+
+    // If autoplay with sound gets blocked, retry muted (should already be muted, but just in case)
+    video.play().catch(() => { video.muted = true; video.play().catch(dismissSplash); });
+  })();
+
   const slider        = document.getElementById('slider');
   const cardWrap      = document.getElementById('cardWrap');
   const loginPanel    = document.getElementById('loginPanel');
@@ -901,6 +941,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     el.addEventListener('input', () => el.classList.remove('error'), { once: true });
   }
 
+  // ── LOGIN ─────────────────────────────────────────────────
   function handleLogin(e) {
     const email    = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -918,46 +959,39 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
       .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
   }
 
+  // ── REGISTER ─────────────────────────────────────────────
   function handleRegister(e) {
     const fullName  = document.getElementById('regName').value.trim();
     const email     = document.getElementById('regEmail').value.trim();
     const password  = document.getElementById('regPassword').value;
     const password2 = document.getElementById('regPassword2').value;
-   const agreed = document.getElementById('agreeCheck').checked;
-if (!agreed) {
-  showToast('Please agree to the Privacy Policy to continue.');
-  const af = document.getElementById('agreeField');
-  af.style.outline = '1px solid rgba(248,113,113,0.60)';
-  af.style.borderRadius = '8px';
-  document.getElementById('agreeCheck').addEventListener('change', () => {
-    af.style.outline = '';
-  }, { once: true });
-  return;
-}
-if (!fullName)                     { showToast('Please enter your full name.');        fieldError('regName');      return; }
-if (!email || !email.includes('@')) { showToast('Please enter a valid email.');        fieldError('regEmail');     return; }
-if (password.length < 6)           { showToast('Password must be at least 6 chars.'); fieldError('regPassword');  return; }
-if (password !== password2)        { showToast('Passwords do not match.');            fieldError('regPassword2'); return; }
-const btn = document.getElementById('registerBtn');
-if (btn.disabled) return;
-doRipple(e, btn); setLoading(btn, true);
-fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register', full_name:fullName, email, password, password2 }) })
-  .then(r => r.json())
-  .then(data => {
-    if (data.ok) showSuccess('Account created!', 'Welcome aboard! Redirecting…', data.redirect);
-    else         { showToast(data.message); setLoading(btn, false); }
-  })
-  .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
-}
+    if (!fullName)                     { showToast('Please enter your full name.');        fieldError('regName');      return; }
+    if (!email || !email.includes('@')) { showToast('Please enter a valid email.');        fieldError('regEmail');     return; }
+    if (password.length < 6)           { showToast('Password must be at least 6 chars.'); fieldError('regPassword');  return; }
+    if (password !== password2)        { showToast('Passwords do not match.');            fieldError('regPassword2'); return; }
+    const btn = document.getElementById('registerBtn');
+    if (btn.disabled) return;
+    doRipple(e, btn); setLoading(btn, true);
+    fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register', full_name:fullName, email, password, password2 }) })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) showSuccess('Account created!', 'Welcome aboard! Redirecting…', data.redirect);
+        else         { showToast(data.message); setLoading(btn, false); }
+      })
+      .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
+  }
 
+  // ── GOOGLE LOGIN ──────────────────────────────────────────
   function handleGoogle() {
     window.location.href = 'index.php?action=google_auth';
   }
 
+  // ── GUEST ─────────────────────────────────────────────────
   function handleGuest() {
     window.location.href = 'commuter/commuter.php?guest=1';
-  }
+}
 
+  // ── FORGOT PASSWORD MODAL ─────────────────────────────────
   function openForgotModal() {
     document.getElementById('forgotFormArea').classList.remove('hidden');
     document.getElementById('forgotSentArea').classList.remove('show');
@@ -994,24 +1028,14 @@ fetch('index.php', { method:'POST', body: new URLSearchParams({ action:'register
       .catch(() => { showToast('Connection error. Please try again.'); setLoading(btn, false); });
   }
 
+  // ── KEYBOARD ──────────────────────────────────────────────
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeForgotModal(); closePrivacyModal(); return; }
+    if (e.key === 'Escape') { closeForgotModal(); return; }
     if (e.key !== 'Enter') return;
     if (document.getElementById('forgotBackdrop').classList.contains('open')) { handleForgot({ clientX:0, clientY:0 }); return; }
     if (current === 'login')    handleLogin({ clientX:0, clientY:0 });
     if (current === 'register') handleRegister({ clientX:0, clientY:0 });
   });
-
-  function openPrivacyModal() {
-  document.getElementById('privacyBackdrop').classList.add('open');
-}
-function closePrivacyModal() {
-  document.getElementById('privacyBackdrop').classList.remove('open');
-}
-function handlePrivacyBackdropClick(e) {
-  if (e.target === document.getElementById('privacyBackdrop')) closePrivacyModal();
-}
-
 </script>
 </body>
 </html>
