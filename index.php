@@ -74,6 +74,9 @@ function clean(string $v): string {
     return trim(htmlspecialchars($v, ENT_QUOTES, 'UTF-8'));
 }
 
+$oauthError = $_SESSION['oauth_error'] ?? null;
+unset($_SESSION['oauth_error']);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = clean($_POST['action'] ?? '');
 
@@ -837,6 +840,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
   }
+
+  <?php if ($oauthError): ?>
+  showToast(<?= json_encode($oauthError) ?>, 'error');
+  <?php endif; ?>
 
   function showSuccess(msg, sub, dest) {
     const ov = document.getElementById('successOverlay');
