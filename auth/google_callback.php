@@ -113,8 +113,8 @@ try {
            ->execute([$acc['id']]);
 
         // Store google_id if not yet saved
-        $db->prepare('UPDATE accounts SET google_id = ? WHERE id = ? AND (google_id IS NULL OR google_id = "")')
-           ->execute([$googleId, $acc['id']]);
+        $db->prepare("UPDATE accounts SET google_id = ? WHERE id = ? AND (google_id IS NULL OR google_id = '')")
+            ->execute([$googleId, $acc['id']]);
 
         session_regenerate_id(true);
         $_SESSION['account_id'] = $acc['id'];
@@ -158,4 +158,4 @@ try {
     if (isset($db) && $db->inTransaction()) $db->rollBack();
     error_log('Google callback DB error: ' . $e->getMessage());
     bail('A server error occurred. Please try again.');
-}
+}   
