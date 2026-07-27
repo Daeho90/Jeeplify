@@ -54,5 +54,5 @@ try {
 
 } catch (Throwable $e) {
     error_log('reschedule_booking: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Server error. Please try again later.']);
 }

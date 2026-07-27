@@ -108,7 +108,7 @@ function handle_update_location(PDO $pdo): void {
     } catch (PDOException $e) {
         error_log('api/update_location: ' . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['ok' => false, 'message' => 'DB error: ' . $e->getMessage()]);
+        echo json_encode(['ok' => false, 'message' => 'Server error. Please try again later.']);
     }
 }
 

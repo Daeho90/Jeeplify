@@ -41,5 +41,5 @@ try {
 
 } catch (Throwable $e) {
     error_log('route_logs: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Server error. Please try again later.']);
 }
