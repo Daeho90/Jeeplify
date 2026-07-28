@@ -20,6 +20,7 @@ function bail(string $msg): void {
 
 // ── STEP 1: Validate state (CSRF protection) ─────────────────
 $state = $_GET['state'] ?? '';
+error_log('OAUTH_DEBUG: session_id=' . session_id() . ' state_received=' . $state . ' state_in_session=' . ($_SESSION['oauth_state'] ?? 'MISSING'));
 if (!$state || !isset($_SESSION['oauth_state']) || !hash_equals($_SESSION['oauth_state'], $state)) {
     bail('Invalid OAuth state. Please try again.');
 }

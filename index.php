@@ -248,6 +248,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'google_auth') {
     $state = bin2hex(random_bytes(16));
     $_SESSION['oauth_state'] = $state;
 
+    // ── TEMP DEBUG — remove once oauth issue is fixed ──────────
+    error_log(sprintf(
+        'OAUTH_DEBUG [initiate] session_id=%s state_set=%s cookie_sent=%s session_save_path=%s',
+        session_id(),
+        $state,
+        isset($_COOKIE[session_name()]) ? $_COOKIE[session_name()] : 'NO_COOKIE_YET',
+        session_save_path() ?: ini_get('session.save_path')
+    ));
+
     $params = http_build_query([
         'client_id'             => GOOGLE_CLIENT_ID,
         'redirect_uri'          => GOOGLE_REDIRECT_URI,
