@@ -228,8 +228,29 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 .status-badge.active{
   background:rgba(34,197,94,.12);color:var(--green);border-color:rgba(34,197,94,.20);
 }
+.status-badge.pending{
+  background:rgba(245,158,11,.12);color:var(--yellow);border-color:rgba(245,158,11,.20);
+}
 .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
 .dot.pulse{animation:blink 1.4s ease-in-out infinite;}
+
+/* ── BOOKING ITEMS ── */
+.booking-item{
+  padding:10px 0;
+}
+.booking-item + .booking-item{
+  border-top:1px solid var(--border);
+}
+.booking-top{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:6px;
+}
+.booking-name{font-size:12px;font-weight:700;}
+.booking-meta{font-size:10.5px;color:var(--muted);line-height:1.5;}
+.booking-meta b{color:var(--text);font-weight:600;}
+.booking-empty{
+  color:var(--muted);font-size:12px;font-style:italic;
+}
 
 /* ── LOGOUT BUTTON ── */
 .logout-btn{
@@ -561,6 +582,12 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
       <span class="skel w60" style="margin-top:8px;"></span>
     </div>
 
+    <div class="slabel">Upcoming Bookings</div>
+    <div class="icard" id="bookingsCard">
+      <span class="skel w80"></span><br>
+      <span class="skel w60" style="margin-top:8px;"></span>
+    </div>
+
     <button class="logout-btn" onclick="handleLogout()">
       <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       Logout
@@ -624,6 +651,12 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
       <span class="skel w80"></span>
       <span class="skel w60" style="display:block;margin-top:8px;"></span>
     </div>
+
+    <div class="sb-label">Upcoming Bookings</div>
+    <div class="sb-card" id="sbBookingsCard">
+      <span class="skel w80"></span>
+      <span class="skel w60" style="display:block;margin-top:8px;"></span>
+    </div>
   </div><!-- /.sb-body -->
 
   <div class="sb-footer">
@@ -672,6 +705,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 ───────────────────────────────────────────────────────── */
 const DEFAULT  = [10.6765, 122.9509];   // number literals — never strings
 const GPS_TICK = 10_000;
+const BOOKINGS_POLL_TICK = 15_000;
 
 /* ─────────────────────────────────────────────────────────
    MAP SETUP
@@ -972,7 +1006,7 @@ async function uploadCoords(lat, lng) {
     const speed   = SPEED_KMH[currentTripStatus] || 25;
     const etaMins = speed > 0 ? Math.round((distKm / speed) * 60) : null;
 
-    await fetch('update_location.php', {
+    await fetch('api.php?action=update_location', {
       method: 'POST',
       body: new URLSearchParams({
         lat,
@@ -1060,7 +1094,7 @@ function highlightStatusBtn(status) {
 async function pushTripStatus(status) {
   if (!currentTripId) return;
   try {
-    const res  = await fetch('update_trip_status.php', {
+    const res  = await fetch('api.php?action=update_trip_status', {
       method: 'POST',
       body: new URLSearchParams({ trip_id: currentTripId, status })
     });
@@ -1180,12 +1214,60 @@ function renderTrip(t) {
   `;
 }
 
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function renderBookings(bookings) {
+  const empty   = `<span class="booking-empty">No upcoming bookings</span>`;
+
+  if (!bookings || bookings.length === 0) {
+    document.getElementById('bookingsCard').innerHTML = empty;
+    const sb = document.getElementById('sbBookingsCard'); if (sb) sb.innerHTML = empty;
+    return;
+  }
+
+  const itemsHTML = bookings.map(b => {
+    const isPending = b.status === 'pending';
+    const badge = `<span class="status-badge ${isPending ? 'pending' : 'active'}">${b.status}</span>`;
+    return `
+      <div class="booking-item">
+        <div class="booking-top">
+          <span class="booking-name">${escapeHtml(b.passenger_name)} (${b.passenger_count})</span>
+          ${badge}
+        </div>
+        <div class="booking-meta">
+          <b>${escapeHtml(b.booking_date)}</b> · ${escapeHtml(b.booking_time)}<br>
+          ${escapeHtml(b.pickup_location)} → ${escapeHtml(b.dropoff_location)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('bookingsCard').innerHTML = itemsHTML;
+  const sb = document.getElementById('sbBookingsCard'); if (sb) sb.innerHTML = itemsHTML;
+}
+
+async function loadBookings() {
+  try {
+    const res = await fetch('api.php?action=driver_bookings');
+    if (res.status === 401) return;
+    const data = await res.json();
+    if (!data.ok) return;
+    renderBookings(data.bookings);
+  } catch (e) {
+    console.error('loadBookings error:', e);
+  }
+}
+
 /* ─────────────────────────────────────────────────────────
    LOAD DATA
 ───────────────────────────────────────────────────────── */
 async function loadDriverData() {
   try {
-    const res = await fetch('get_driver_data.php');
+    const res = await fetch('api.php?action=get_driver_data');
     if (res.status === 401) { window.location.href = '../index.php'; return; }
     const data = await res.json();
     if (!data.ok) { showToast(data.message || 'Failed to load driver data.'); return; }
@@ -1231,6 +1313,8 @@ document.getElementById('skipBtn').onclick  = () => { overlay.classList.remove('
 ───────────────────────────────────────────────────────── */
 window.addEventListener('load', () => {
   loadDriverData();
+  loadBookings();
+  setInterval(loadBookings, BOOKINGS_POLL_TICK);
   resetETA();
   setTimeout(() => overlay.classList.add('active'), 700);
 });
@@ -1238,7 +1322,7 @@ window.addEventListener('beforeunload', () => {
   stopGps();
   // Best-effort: mark jeepney offline immediately rather than waiting for
   // the 10-minute staleness timeout in driver_locations.
-  navigator.sendBeacon('update_location.php', new URLSearchParams({
+  navigator.sendBeacon('api.php?action=update_location', new URLSearchParams({
     lat: 0, lng: 0, status: 'offline', _offline: '1'
   }));
 });
