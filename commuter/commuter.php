@@ -924,7 +924,7 @@ if ($accountId) {
         <svg class="top-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <input class="top-search" type="text" placeholder="Search routes, jeepney IDs, drivers…" id="topSearch" autocomplete="off">
+        <input class="top-search" type="text" placeholder="Search routes, jeepneys, or a location…" id="topSearch" autocomplete="off">
         <div class="search-results" id="searchResults"></div>
       </div>
       <button class="top-icon-btn" id="themeBtn" title="Toggle map theme">
@@ -1396,18 +1396,36 @@ async function pollJeepneys() {
 pollJeepneys();
 setInterval(pollJeepneys, 8000);
 
-/* ── SEARCH ── */
+/* ── SEARCH (jeepneys + locations via Nominatim) ── */
 const searchInput   = document.getElementById('topSearch');
 const searchResults = document.getElementById('searchResults');
 const SEARCH_DOT = { on_route:'#10b981', traffic:'#f59e0b', maintenance:'#f97316', complete:'#6b7280', idle:'#9ca3af' };
 
-function renderSearchResults(matches, q) {
-  if (!q) { searchResults.classList.remove('open'); searchResults.innerHTML = ''; return; }
-  if (!matches.length) {
-    searchResults.innerHTML = '<div class="sr-empty">No jeepneys match your search</div>';
-    searchResults.classList.add('open'); return;
+let placeMarker   = null;
+let placeMatches  = [];
+let geocodeTimer  = null;
+let geocodeAbort  = null;
+
+// Rough Bacolod City bounding box (lon,lat) — biases results toward the area
+const BACOLOD_VIEWBOX = '122.86,10.75,123.05,10.62';
+
+async function searchLocations(q) {
+  if (geocodeAbort) geocodeAbort.abort();
+  geocodeAbort = new AbortController();
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&viewbox=${BACOLOD_VIEWBOX}&bounded=0&limit=5&addressdetails=0`;
+    const res = await fetch(url, { signal: geocodeAbort.signal, headers: { 'Accept-Language': 'en' } });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    if (e.name !== 'AbortError') console.warn('Geocode failed:', e);
+    return [];
   }
-  searchResults.innerHTML = matches.slice(0,8).map(([id,d]) => {
+}
+
+function renderSearchResults(jeepMatches, locMatches, q) {
+  if (!q) { searchResults.classList.remove('open'); searchResults.innerHTML = ''; return; }
+  const jeepHtml = jeepMatches.slice(0,5).map(([id,d]) => {
     const dot = SEARCH_DOT[d.display_status] || '#9ca3af';
     return `<div class="sr-item" onclick="selectSearchResult('${id}')">
       <span class="sr-dot" style="background:${dot}"></span>
@@ -1417,8 +1435,18 @@ function renderSearchResults(matches, q) {
       </div>
     </div>`;
   }).join('');
+  const locHtml = locMatches.slice(0,5).map((loc, idx) => `
+    <div class="sr-item" onclick="selectPlaceResult(${idx})">
+      <span class="sr-dot" style="background:#3b82f6"></span>
+      <div class="sr-text">
+        <div class="sr-title">${esc(loc.display_name.split(',')[0])}</div>
+        <div class="sr-sub">${esc(loc.display_name)}</div>
+      </div>
+    </div>`).join('');
+  searchResults.innerHTML = (jeepHtml + locHtml) || '<div class="sr-empty">No matches found</div>';
   searchResults.classList.add('open');
 }
+
 function selectSearchResult(id) {
   const marker = jeepMarkers[id], d = jeepData[id];
   if (!marker || !d) return;
@@ -1429,18 +1457,45 @@ function selectSearchResult(id) {
   searchInput.value = d.unit_code || '';
   searchInput.blur();
 }
+
+function selectPlaceResult(idx) {
+  const loc = placeMatches[idx];
+  if (!loc) return;
+  const lat = parseFloat(loc.lat), lng = parseFloat(loc.lon);
+  if (placeMarker) map.removeLayer(placeMarker);
+  placeMarker = L.marker([lat,lng]).addTo(map)
+    .bindPopup(`<div style="font-family:'Montserrat',sans-serif;padding:10px 12px;max-width:220px;">
+      <div style="font-size:12.5px;font-weight:700;color:#f9fafb;">${esc(loc.display_name.split(',')[0])}</div>
+      <div style="font-size:10.5px;color:#9ca3af;margin-top:3px;">${esc(loc.display_name)}</div>
+    </div>`)
+    .openPopup();
+  map.flyTo([lat,lng], 16, { duration:.6 });
+  searchResults.classList.remove('open');
+  searchInput.value = loc.display_name.split(',')[0];
+  searchInput.blur();
+}
+
 searchInput.addEventListener('input', function() {
-  const q = this.value.trim().toLowerCase();
-  const matches = [];
+  const q = this.value.trim();
+  const qLower = q.toLowerCase();
+  const jeepMatches = [];
   Object.entries(jeepMarkers).forEach(([id, marker]) => {
     const d = jeepData[id]; if (!d) return;
     const hay = [d.unit_code, d.plate_no, d.route_name, d.driver_name].filter(Boolean).join(' ').toLowerCase();
-    if (!q || hay.includes(q)) {
+    if (!qLower || hay.includes(qLower)) {
       if (!map.hasLayer(marker)) marker.addTo(map);
-      if (q) matches.push([id,d]);
+      if (qLower) jeepMatches.push([id,d]);
     } else { if (map.hasLayer(marker)) map.removeLayer(marker); }
   });
-  renderSearchResults(matches, q);
+
+  renderSearchResults(jeepMatches, placeMatches, q);
+
+  clearTimeout(geocodeTimer);
+  if (q.length < 3) { placeMatches = []; renderSearchResults(jeepMatches, placeMatches, q); return; }
+  geocodeTimer = setTimeout(async () => {
+    placeMatches = await searchLocations(q);
+    renderSearchResults(jeepMatches, placeMatches, searchInput.value.trim());
+  }, 450);
 });
 searchInput.addEventListener('focus', function() { if (this.value.trim()) this.dispatchEvent(new Event('input')); });
 document.addEventListener('click', (e) => {
