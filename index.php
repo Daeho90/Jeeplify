@@ -11,47 +11,50 @@ require_once 'PHPMailer/src/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-// ── SMTP CONFIG (Gmail) ──────────────────────────────────────
-// 1. Use a Gmail address you control.
-// 2. Turn on 2-Step Verification on that Google account.
-// 3. Create an "App Password": https://myaccount.google.com/apppasswords
-//    (choose app "Mail", device "Other" -> name it "Jeeplify") and paste
-//    the 16-character password below (no spaces).
-define('SMTP_HOST',      'smtp.gmail.com');
-define('SMTP_PORT',      587);
-define('SMTP_USERNAME',  getenv('SMTP_USERNAME') ?: '');
-define('SMTP_PASSWORD',  getenv('SMTP_PASSWORD') ?: '');                // TODO: 16-char app password
-define('SMTP_FROM',      SMTP_USERNAME);
-define('SMTP_FROM_NAME', 'Jeeplify BCD');
+// ── RESEND CONFIG ─────────────────────────────────────────────
+define('RESEND_API_KEY', getenv('RESEND_API_KEY') ?: '');
+define('RESEND_FROM',    'Jeeplify BCD <onboarding@resend.dev>'); // swap once domain verified
 
 /**
- * Send an email via SMTP (Gmail). Returns true on success, false on failure.
+ * Send an email via Resend's HTTP API. Returns true on success, false on failure.
  * On failure, $errorOut is populated with a human-readable reason.
  */
-function sendMailSMTP(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
-    $mail = new PHPMailer(true);
-    try {
-        $mail->isSMTP();
-        $mail->Host       = SMTP_HOST;
-        $mail->SMTPAuth   = true;
-        $mail->Username   = SMTP_USERNAME;
-        $mail->Password   = SMTP_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = SMTP_PORT;
+function sendMailResend(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
+    $payload = json_encode([
+        'from'    => RESEND_FROM,
+        'to'      => [$toEmail],
+        'subject' => $subject,
+        'text'    => $body,
+    ]);
 
-        $mail->setFrom(SMTP_FROM, SMTP_FROM_NAME);
-        $mail->addAddress($toEmail);
+    $ch = curl_init('https://api.resend.com/emails');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . RESEND_API_KEY,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_TIMEOUT        => 10,
+    ]);
 
-        $mail->isHTML(false);
-        $mail->Subject = $subject;
-        $mail->Body    = $body;
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr  = curl_error($ch);
+    curl_close($ch);
 
-        $mail->send();
-        return true;
-    } catch (PHPMailerException $e) {
-        $errorOut = $mail->ErrorInfo ?: $e->getMessage();
+    if ($curlErr) {
+        $errorOut = 'cURL error: ' . $curlErr;
         return false;
     }
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        return true;
+    }
+
+    $errorOut = "Resend API error (HTTP $httpCode): " . $response;
+    return false;
 }
 
 const ROLE_REDIRECTS = [
@@ -224,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $body    = "Hello,\n\nClick the link below to reset your password (expires in 1 hour):\n\n$resetLink\n\nIf you did not request this, you can safely ignore this email.\n\n— Jeeplify Team";
 
             $mailError = null;
-            $sent = sendMailSMTP($email, $subject, $body, $mailError);
+            $sent = sendMailResend($email, $subject, $body, $mailError);
 
             if (!$sent) {
                 error_log('Forgot password mail error: ' . $mailError);
