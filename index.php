@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare('INSERT INTO password_resets (account_id, token, expires_at) VALUES (?,?,?)')
                ->execute([$acc['id'], $token, $expiresAt]);
 
-            $resetLink = 'https://bcd-jeepney.kesug.com/reset_password.php?token=' . $token;
+            $resetLink = 'https://jeeplify.onrender.com/reset_password.php?token=' . $token;
 
             $subject = 'Reset Your Jeeplify Password';
             $body    = "Hello,\n\nClick the link below to reset your password (expires in 1 hour):\n\n$resetLink\n\nIf you did not request this, you can safely ignore this email.\n\n— Jeeplify Team";
