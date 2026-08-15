@@ -4,37 +4,33 @@ require_once 'session_init.php';
 
 require_once 'db.php';
 require_once 'rate_limit.php';
-require_once 'PHPMailer/src/Exception.php';
-require_once 'PHPMailer/src/PHPMailer.php';
-require_once 'PHPMailer/src/SMTP.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception as PHPMailerException;
-
-// ── RESEND CONFIG ─────────────────────────────────────────────
-define('RESEND_API_KEY', getenv('RESEND_API_KEY') ?: '');
-define('RESEND_FROM',    'Jeeplify BCD <onboarding@resend.dev>'); // swap once domain verified
+// ── BREVO CONFIG ─────────────────────────────────────────────
+define('BREVO_API_KEY',  getenv('BREVO_API_KEY') ?: '');
+define('BREVO_FROM_EMAIL', 'joevenlor@gmail.com');
+define('BREVO_FROM_NAME',  'Jeeplify BCD');
 
 /**
- * Send an email via Resend's HTTP API. Returns true on success, false on failure.
+ * Send an email via Brevo's HTTP API. Returns true on success, false on failure.
  * On failure, $errorOut is populated with a human-readable reason.
  */
 function sendMailResend(string $toEmail, string $subject, string $body, ?string &$errorOut = null): bool {
     $payload = json_encode([
-        'from'    => RESEND_FROM,
-        'to'      => [$toEmail],
-        'subject' => $subject,
-        'text'    => $body,
+        'sender'      => ['name' => BREVO_FROM_NAME, 'email' => BREVO_FROM_EMAIL],
+        'to'          => [['email' => $toEmail]],
+        'subject'     => $subject,
+        'textContent' => $body,
     ]);
 
-    $ch = curl_init('https://api.resend.com/emails');
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . RESEND_API_KEY,
+            'api-key: ' . BREVO_API_KEY,
             'Content-Type: application/json',
+            'Accept: application/json',
         ],
         CURLOPT_TIMEOUT        => 10,
     ]);
@@ -53,7 +49,7 @@ function sendMailResend(string $toEmail, string $subject, string $body, ?string 
         return true;
     }
 
-    $errorOut = "Resend API error (HTTP $httpCode): " . $response;
+    $errorOut = "Brevo API error (HTTP $httpCode): " . $response;
     return false;
 }
 
