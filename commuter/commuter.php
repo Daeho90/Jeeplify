@@ -47,8 +47,9 @@ if ($accountId) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="fav.png"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link rel='stylesheet' type='text/css' href='https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css'/>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js"></script>
   <style>
     /* ══════════════════════════════════════════════
        DESIGN TOKENS
@@ -101,7 +102,12 @@ if ($accountId) {
     .app { position: relative; width: 100%; height: 100vh; height: var(--app-height, 100vh); display: flex; flex-direction: column; overflow: hidden; }
     .map-area { position: relative; flex: 1; min-height: 0; overflow: hidden; }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
-    .leaflet-container { background: var(--bg) !important; }
+    #map, #map canvas { background: var(--bg) !important; }
+    /* TomTom's night filter — the default SDK style is light-only, so
+       "night"/"dusk" themes are simulated with a CSS filter on the canvas
+       rather than swapping tile sets like Leaflet did. */
+    #map.jl-filter-invert canvas { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9); }
+    #map.jl-filter-dim canvas    { filter: brightness(0.78) saturate(0.85); }
 
     /* ── TOP BAR ── */
     .top-bar {
@@ -303,9 +309,14 @@ if ($accountId) {
     .pc-logout:active { background: rgba(239,68,68,.20); }
     .pc-logout svg { width: 13px; height: 13px; }
 
-    /* ── LEAFLET OVERRIDES ── */
-    .leaflet-control-zoom { display: none !important; }
-    .leaflet-popup-content-wrapper {
+    /* ── TOMTOM SDK OVERRIDES ──
+       No NavigationControl is added below, so there's no built-in zoom
+       control to hide (unlike Leaflet, which shows one by default).
+       TomTom's Popup is built on MapLibre GL JS, so its DOM uses the
+       .maplibregl-* class names; we target those (plus the legacy
+       .mapboxgl-* names as a fallback, since some SDK builds alias them). */
+    .maplibregl-popup-content,
+    .mapboxgl-popup-content {
       background: rgba(8,14,28,.97) !important;
       backdrop-filter: blur(20px);
       border: 1px solid var(--border2) !important;
@@ -313,11 +324,18 @@ if ($accountId) {
       box-shadow: 0 10px 36px rgba(0,0,0,.55) !important;
       color: var(--text) !important;
       font-family: 'Montserrat', sans-serif !important;
+      padding: 0 !important;
     }
-    .leaflet-popup-content { margin: 0 !important; }
-    .leaflet-popup-tip-container { display: none; }
-    .leaflet-popup-close-button { color: var(--muted) !important; font-size: 18px !important; top: 8px !important; right: 10px !important; }
-    .leaflet-control-attribution { background: rgba(6,10,22,.8) !important; color: rgba(255,255,255,.3) !important; font-size: 9px !important; }
+    .maplibregl-popup-tip, .mapboxgl-popup-tip { display: none !important; }
+    .maplibregl-popup-close-button,
+    .mapboxgl-popup-close-button {
+      color: var(--muted) !important; font-size: 18px !important;
+      top: 8px !important; right: 10px !important;
+    }
+    .maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib {
+      background: rgba(6,10,22,.8) !important; color: rgba(255,255,255,.3) !important; font-size: 9px !important;
+    }
+    .maplibregl-ctrl-logo, .mapboxgl-ctrl-logo { opacity: .55; }
 
     /* ── SEARCH DROPDOWN ── */
     .search-results {
@@ -980,13 +998,20 @@ function setAppHeight() {
 setAppHeight();
 window.addEventListener('resize', setAppHeight);
 
-/* ── MAP ── */
+/* ── MAP (TomTom Maps SDK for Web) ── */
+const TOMTOM_KEY = '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO'; // domain-restricted in TomTom dashboard
 const DEFAULT_LAT = 10.6765, DEFAULT_LNG = 122.9509;
+
+// NOTE: TomTom's default vector style is light-only. There's no built-in
+// "night style" preset name to swap to the way Leaflet swapped raster tile
+// URLs, so day/dawn/dusk/night is simulated with a CSS filter on the map
+// canvas (see #map.jl-filter-* rules above). If you create a custom dark
+// style in TomTom Map Styler, swap this out for map.setStyle('your-style-url').
 const MAP_THEMES = {
-  dawn:  { tile:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                icon:'🌅', label:'dawn'  },
-  day:   { tile:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',                icon:'☀️', label:'day'   },
-  dusk:  { tile:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', icon:'🌇', label:'dusk'  },
-  night: { tile:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', icon:'🌙', label:'night' }
+  dawn:  { filterClass: null,               icon:'🌅', label:'dawn'  },
+  day:   { filterClass: null,               icon:'☀️', label:'day'   },
+  dusk:  { filterClass: 'jl-filter-dim',    icon:'🌇', label:'dusk'  },
+  night: { filterClass: 'jl-filter-invert', icon:'🌙', label:'night' }
 };
 const THEME_ORDER = ['night','dawn','day','dusk'];
 function getThemeByHour(h) {
@@ -995,51 +1020,58 @@ function getThemeByHour(h) {
   if (h >= 17 && h < 19) return MAP_THEMES.dusk;
   return MAP_THEMES.night;
 }
-const map = L.map('map', { center:[DEFAULT_LAT, DEFAULT_LNG], zoom:15, zoomControl:false });
-function applyTheme(theme, oldLayer) {
-  if (oldLayer) map.removeLayer(oldLayer);
-  const opts = { attribution:'© OpenStreetMap © CARTO', maxZoom:19 };
-  if (theme.tile.includes('cartocdn')) opts.subdomains = 'abcd';
-  const layer = L.tileLayer(theme.tile, opts).addTo(map);
+
+// TomTom coordinates are [lng, lat] (opposite of Leaflet's [lat, lng]).
+const map = tt.map({
+  key: TOMTOM_KEY,
+  container: 'map',
+  center: [DEFAULT_LNG, DEFAULT_LAT],
+  zoom: 15,
+});
+// No tt.NavigationControl added on purpose — mirrors the old zoomControl:false setup.
+
+function applyTheme(theme) {
+  const mapEl = document.getElementById('map');
+  mapEl.classList.remove('jl-filter-invert', 'jl-filter-dim');
+  if (theme.filterClass) mapEl.classList.add(theme.filterClass);
   document.getElementById('themeBtnIcon').textContent = theme.icon;
-  return layer;
 }
 const initTheme = getThemeByHour(new Date().getHours());
 let currentThemeIdx = THEME_ORDER.indexOf(initTheme.label);
 if (currentThemeIdx < 0) currentThemeIdx = 0;
-let tileLayer = applyTheme(initTheme, null);
-setTimeout(() => map.invalidateSize(), 300);
+map.on('load', () => applyTheme(initTheme));
+setTimeout(() => map.resize(), 300);
 document.getElementById('themeBtn').addEventListener('click', () => {
   currentThemeIdx = (currentThemeIdx + 1) % THEME_ORDER.length;
-  tileLayer = applyTheme(MAP_THEMES[THEME_ORDER[currentThemeIdx]], tileLayer);
+  applyTheme(MAP_THEMES[THEME_ORDER[currentThemeIdx]]);
 });
 setInterval(() => {
   const auto = getThemeByHour(new Date().getHours());
   const idx  = THEME_ORDER.indexOf(auto.label);
-  if (idx !== currentThemeIdx) { currentThemeIdx = idx; tileLayer = applyTheme(auto, tileLayer); }
+  if (idx !== currentThemeIdx) { currentThemeIdx = idx; applyTheme(auto); }
 }, 60000);
 
-/* ── TRAFFIC LAYER (TomTom) ── */
-const TOMTOM_KEY = '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO'; // domain-restricted in TomTom dashboard
-let trafficLayer = null;
+/* ── TRAFFIC LAYER (TomTom SDK native traffic, not a manual tile URL) ── */
 let trafficOn = false;
 
-function buildTrafficLayer() {
-  return L.tileLayer(
-    `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`,
-    { maxZoom: 19, opacity: 0.75 }
-  );
+function setTraffic(on) {
+  if (on) {
+    map.showTrafficFlow();
+    map.showTrafficIncidents();
+  } else {
+    map.hideTrafficFlow();
+    map.hideTrafficIncidents();
+  }
 }
 
 document.getElementById('trafficBtn').addEventListener('click', () => {
   trafficOn = !trafficOn;
   const btn = document.getElementById('trafficBtn');
+  setTraffic(trafficOn);
   if (trafficOn) {
-    trafficLayer = buildTrafficLayer().addTo(map);
     btn.style.background = 'rgba(239,68,68,.25)';
     btn.style.borderColor = 'rgba(239,68,68,.4)';
   } else {
-    if (trafficLayer) map.removeLayer(trafficLayer);
     btn.style.background = '';
     btn.style.borderColor = '';
   }
@@ -1309,7 +1341,9 @@ async function cancelBooking(id, btn) {
 const jeepMarkers = {}, jeepData = {};
 const JEEP_IMG = new Image(); JEEP_IMG.src = '/commuter/Modern.png';
 
-function makeJeepIcon(direction, stale, status) {
+// TomTom's tt.Marker takes a plain DOM element (like Mapbox/MapLibre markers)
+// instead of Leaflet's L.divIcon — build the element directly.
+function makeJeepEl(direction, stale, status) {
   const STATUS_COLORS = {
     on_route:    { glow:'rgba(16,185,129,.8)',  pulse:'#6ee7b7' },
     traffic:     { glow:'rgba(245,158,11,.8)',  pulse:'#fde68a' },
@@ -1330,15 +1364,14 @@ function makeJeepIcon(direction, stale, status) {
   const opacity = stale ? '0.45' : '1';
   const glow    = stale ? '' : `filter:drop-shadow(0 0 6px ${sc.glow});`;
   const imgUrl  = window.location.origin + '/commuter/Modern.png';
-  return L.divIcon({
-    className: '',
-    html: `
-      <div style="position:relative;width:40px;height:40px;">
-        ${!stale ? `<span style="position:absolute;top:50%;left:50%;width:28px;height:28px;margin-top:-14px;margin-left:-14px;border-radius:50%;background:${dotColor};opacity:.6;animation:${animName} 2s ease-out infinite;pointer-events:none;display:block;"></span>` : ''}
-        <img src="${imgUrl}" width="40" height="40" style="position:absolute;top:0;left:0;width:40px;height:40px;object-fit:contain;transform:${flip};transform-origin:center;opacity:${opacity};${glow}display:block;">
-      </div>`,
-    iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]
-  });
+  const el = document.createElement('div');
+  el.style.cssText = 'position:relative;width:28px;height:28px;cursor:pointer;';
+  el.innerHTML = `
+    <div style="position:relative;width:40px;height:40px;left:-6px;top:-6px;">
+      ${!stale ? `<span style="position:absolute;top:50%;left:50%;width:28px;height:28px;margin-top:-14px;margin-left:-14px;border-radius:50%;background:${dotColor};opacity:.6;animation:${animName} 2s ease-out infinite;pointer-events:none;display:block;"></span>` : ''}
+      <img src="${imgUrl}" width="40" height="40" style="position:absolute;top:0;left:0;width:40px;height:40px;object-fit:contain;transform:${flip};transform-origin:center;opacity:${opacity};${glow}display:block;">
+    </div>`;
+  return el;
 }
 
 const TRIP_STATUS_STYLES = {
@@ -1399,20 +1432,31 @@ async function pollJeepneys() {
       if (!isFinite(lat) || !isFinite(lng)) return;
       seen.add(d.account_id);
       jeepData[d.account_id] = d;
-      if (jeepMarkers[d.account_id]) {
-        const m = jeepMarkers[d.account_id];
-        m.setLatLng([lat,lng]);
-        m.setIcon(makeJeepIcon(d.direction, d.stale, d.display_status));
-        if (m.isPopupOpen()) m.setPopupContent(buildPopup(d));
+      // tt.Marker (like the Mapbox/MapLibre marker it wraps) doesn't cleanly
+      // support swapping its DOM element in place, so on each update we
+      // just move the existing marker and, if its icon needs to change
+      // (status/direction/staleness), remove and recreate it.
+      const iconKey = `${d.direction}|${d.stale}|${d.display_status}`;
+      const existing = jeepMarkers[d.account_id];
+      if (existing && existing._jlIconKey === iconKey) {
+        existing.setLngLat([lng, lat]);
+        if (existing._jlPopup && existing._jlPopup.isOpen()) existing._jlPopup.setHTML(buildPopup(d));
       } else {
-        const m = L.marker([lat,lng], { icon:makeJeepIcon(d.direction, d.stale, d.display_status) })
-          .bindPopup(buildPopup(d), { maxWidth:260, closeButton:true })
+        if (existing) existing.remove();
+        const wasOpen = existing && existing._jlPopup && existing._jlPopup.isOpen();
+        const popup = new tt.Popup({ offset: 30, maxWidth: '260px' }).setHTML(buildPopup(d));
+        const m = new tt.Marker({ element: makeJeepEl(d.direction, d.stale, d.display_status) })
+          .setLngLat([lng, lat])
+          .setPopup(popup)
           .addTo(map);
+        m._jlIconKey = iconKey;
+        m._jlPopup   = popup;
+        if (wasOpen) m.togglePopup();
         jeepMarkers[d.account_id] = m;
       }
     });
     Object.keys(jeepMarkers).forEach(id => {
-      if (!seen.has(+id)) { map.removeLayer(jeepMarkers[id]); delete jeepMarkers[id]; delete jeepData[id]; }
+      if (!seen.has(+id)) { jeepMarkers[id].remove(); delete jeepMarkers[id]; delete jeepData[id]; }
     });
     const count = seen.size;
     document.getElementById('liveCount').textContent = count === 0 ? 'No jeepneys online' : `${count} jeepney${count !== 1 ? 's' : ''} live`;
@@ -1476,9 +1520,10 @@ function renderSearchResults(jeepMatches, locMatches, q) {
 function selectSearchResult(id) {
   const marker = jeepMarkers[id], d = jeepData[id];
   if (!marker || !d) return;
-  if (!map.hasLayer(marker)) marker.addTo(map);
-  map.flyTo([parseFloat(d.lat), parseFloat(d.lng)], Math.max(map.getZoom(),17), { duration:.6 });
-  marker.openPopup();
+  // TomTom markers stay on the map once added (no per-layer hasLayer check
+  // needed the way Leaflet required); just fly to it and open its popup.
+  map.flyTo({ center: [parseFloat(d.lng), parseFloat(d.lat)], zoom: Math.max(map.getZoom(),17), duration: 600 });
+  marker.togglePopup();
   searchResults.classList.remove('open');
   searchInput.value = d.unit_code || '';
   searchInput.blur();
@@ -1488,14 +1533,17 @@ function selectPlaceResult(idx) {
   const loc = placeMatches[idx];
   if (!loc) return;
   const lat = parseFloat(loc.lat), lng = parseFloat(loc.lon);
-  if (placeMarker) map.removeLayer(placeMarker);
-  placeMarker = L.marker([lat,lng]).addTo(map)
-    .bindPopup(`<div style="font-family:'Montserrat',sans-serif;padding:10px 12px;max-width:220px;">
+  if (placeMarker) placeMarker.remove();
+  const popup = new tt.Popup({ offset: 30 }).setHTML(`<div style="font-family:'Montserrat',sans-serif;padding:10px 12px;max-width:220px;">
       <div style="font-size:12.5px;font-weight:700;color:#f9fafb;">${esc(loc.display_name.split(',')[0])}</div>
       <div style="font-size:10.5px;color:#9ca3af;margin-top:3px;">${esc(loc.display_name)}</div>
-    </div>`)
-    .openPopup();
-  map.flyTo([lat,lng], 16, { duration:.6 });
+    </div>`);
+  placeMarker = new tt.Marker()
+    .setLngLat([lng, lat])
+    .setPopup(popup)
+    .addTo(map);
+  placeMarker.togglePopup();
+  map.flyTo({ center: [lng, lat], zoom: 16, duration: 600 });
   searchResults.classList.remove('open');
   searchInput.value = loc.display_name.split(',')[0];
   searchInput.blur();
@@ -1508,10 +1556,15 @@ searchInput.addEventListener('input', function() {
   Object.entries(jeepMarkers).forEach(([id, marker]) => {
     const d = jeepData[id]; if (!d) return;
     const hay = [d.unit_code, d.plate_no, d.route_name, d.driver_name].filter(Boolean).join(' ').toLowerCase();
+    // TomTom markers don't have Leaflet's hasLayer/addTo per-layer toggle;
+    // show/hide by toggling the marker element's display instead.
+    const el = marker.getElement ? marker.getElement() : null;
     if (!qLower || hay.includes(qLower)) {
-      if (!map.hasLayer(marker)) marker.addTo(map);
+      if (el) el.style.display = '';
       if (qLower) jeepMatches.push([id,d]);
-    } else { if (map.hasLayer(marker)) map.removeLayer(marker); }
+    } else if (el) {
+      el.style.display = 'none';
+    }
   });
 
   renderSearchResults(jeepMatches, placeMatches, q);
@@ -1527,7 +1580,7 @@ searchInput.addEventListener('focus', function() { if (this.value.trim()) this.d
 document.addEventListener('click', (e) => {
   if (!searchResults.contains(e.target) && e.target !== searchInput) searchResults.classList.remove('open');
 });
-window.addEventListener('resize', () => map.invalidateSize());
+window.addEventListener('resize', () => map.resize());
 
 /* ══════════════════════════════════════════════
    AI AGENT CHAT (Jeep)
