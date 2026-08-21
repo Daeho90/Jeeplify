@@ -1557,19 +1557,13 @@ function makeUserEl(mode) {
     style.textContent = `@keyframes userPulse { 0%{transform:scale(1);opacity:.55} 70%{transform:scale(2.2);opacity:0} 100%{transform:scale(2.2);opacity:0} }`;
     document.head.appendChild(style);
   }
-  const isCar = mode === 'car';
-  const bg    = isCar ? '#f59e0b' : '#3b82f6';
-  const glow  = isCar ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)';
-  const iconSvg = isCar
-    ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-         <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
-         <line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/>
-         <line x1="3" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="21" y2="12"/>
-       </svg>`
-    : `<svg viewBox="0 0 24 24" width="18" height="18" fill="#fff">
-         <circle cx="12" cy="4" r="2"/>
-         <path d="M13.5 8.5 12 7l-3 1.2v4.3l-2 6 1.9.7 1.8-5.2.8 1v5.5h2v-6l-1-2.5.6-2.2 1 1.5c.4.6 1 1 1.7 1H18v-2h-2.2z"/>
-       </svg>`;
+  const isCar   = mode === 'car';
+  const bg      = isCar ? '#f59e0b' : '#3b82f6';
+  const glow    = isCar ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)';
+  const iconSrc = isCar
+    ? window.location.origin + '/commuter/car.png'
+    : window.location.origin + '/commuter/people.png';
+
   const el = document.createElement('div');
   el.style.cssText = 'position:relative;width:36px;height:36px;';
   el.innerHTML = `
@@ -1577,8 +1571,8 @@ function makeUserEl(mode) {
                  border-radius:50%;background:${glow};opacity:.55;animation:userPulse 2s ease-out infinite;pointer-events:none;"></span>
     <div style="position:relative;width:34px;height:34px;border-radius:50%;background:${bg};
                 border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4);
-                display:flex;align-items:center;justify-content:center;">
-      ${iconSvg}
+                display:flex;align-items:center;justify-content:center;overflow:hidden;">
+      <img src="${iconSrc}" width="20" height="20" style="object-fit:contain;display:block;">
     </div>`;
   return el;
 }
