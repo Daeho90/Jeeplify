@@ -1550,6 +1550,39 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function makeUserEl(mode) {
+  if (!document.getElementById('anim_userPulse')) {
+    const style = document.createElement('style');
+    style.id = 'anim_userPulse';
+    style.textContent = `@keyframes userPulse { 0%{transform:scale(1);opacity:.55} 70%{transform:scale(2.2);opacity:0} 100%{transform:scale(2.2);opacity:0} }`;
+    document.head.appendChild(style);
+  }
+  const isCar = mode === 'car';
+  const bg    = isCar ? '#f59e0b' : '#3b82f6';
+  const glow  = isCar ? 'rgba(245,158,11,.55)' : 'rgba(59,130,246,.55)';
+  const iconSvg = isCar
+    ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+         <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>
+         <line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/>
+         <line x1="3" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="21" y2="12"/>
+       </svg>`
+    : `<svg viewBox="0 0 24 24" width="18" height="18" fill="#fff">
+         <circle cx="12" cy="4" r="2"/>
+         <path d="M13.5 8.5 12 7l-3 1.2v4.3l-2 6 1.9.7 1.8-5.2.8 1v5.5h2v-6l-1-2.5.6-2.2 1 1.5c.4.6 1 1 1.7 1H18v-2h-2.2z"/>
+       </svg>`;
+  const el = document.createElement('div');
+  el.style.cssText = 'position:relative;width:36px;height:36px;';
+  el.innerHTML = `
+    <span style="position:absolute;top:50%;left:50%;width:34px;height:34px;margin-top:-17px;margin-left:-17px;
+                 border-radius:50%;background:${glow};opacity:.55;animation:userPulse 2s ease-out infinite;pointer-events:none;"></span>
+    <div style="position:relative;width:34px;height:34px;border-radius:50%;background:${bg};
+                border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4);
+                display:flex;align-items:center;justify-content:center;">
+      ${iconSvg}
+    </div>`;
+  return el;
+}
+
 function findNearestJeepney(lat, lng) {
   let best = null, bestDist = Infinity;
   Object.entries(jeepData).forEach(([id, d]) => {
@@ -1619,6 +1652,10 @@ function setOriginAndRoute(lat, lng) {
 function setRouteMode(mode) {
   currentRouteMode = mode;
   document.querySelectorAll('.ric-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (originMarker && userOrigin) {
+    originMarker.remove();
+    originMarker = new tt.Marker({ element: makeUserEl(mode) }).setLngLat([userOrigin.lng, userOrigin.lat]).addTo(map);
+  }
   if (userOrigin && targetJeepId) drawRoute();
 }
 
@@ -1743,10 +1780,10 @@ function clearRouteToJeepney() {
   userOrigin = null; targetJeepId = null; mapClickArmed = false;
   if (originMarker) { originMarker.remove(); originMarker = null; }
   if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+  if (map.getLayer(routeLayerId + '-casing')) map.removeLayer(routeLayerId + '-casing');
   if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
   document.getElementById('routeInfoCard').classList.remove('visible');
 }
-
 // Keep the route live: redraw every time the jeepney position updates
 const _originalPollJeepneys = pollJeepneys;
 setInterval(() => {
