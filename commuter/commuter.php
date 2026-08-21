@@ -159,7 +159,7 @@ if ($accountId) {
     /* ── LIVE COUNTER PILL ── */
     .live-pill {
       position: absolute;
-      top: calc(80px + var(--safe-t));
+      top: calc(140px + var(--safe-t));
       left: 50%; transform: translateX(-50%);
       z-index: 20;
       display: flex; align-items: center; gap: 7px;
@@ -532,9 +532,6 @@ if ($accountId) {
 
     /* ══════════════════════════════════════════════
        AI AGENT CHAT BUBBLE
-       Signature: amber glow ring that pulses like
-       a jeepney horn indicator — the one bold moment
-       on an otherwise disciplined dark interface.
     ══════════════════════════════════════════════ */
 
 #jeep-chat-btn {
@@ -789,7 +786,7 @@ if ($accountId) {
   <button class="pc-logout" onclick="doLogout()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-      <polyline points="16 17 21 12 16 7"/>
+      <polyline points="16 17 21 12 16 17"/>
       <line x1="21" y1="12" x2="9" y2="12"/>
     </svg>
     Logout
@@ -930,6 +927,9 @@ if ($accountId) {
       <button class="top-icon-btn" id="themeBtn" title="Toggle map theme">
         <span id="themeBtnIcon">🌙</span>
       </button>
+      <button class="top-icon-btn" id="trafficBtn" title="Toggle traffic">
+        <span id="trafficBtnIcon">🚦</span>
+      </button>
     </div>
 
     <!-- LIVE COUNTER PILL -->
@@ -1018,6 +1018,32 @@ setInterval(() => {
   const idx  = THEME_ORDER.indexOf(auto.label);
   if (idx !== currentThemeIdx) { currentThemeIdx = idx; tileLayer = applyTheme(auto, tileLayer); }
 }, 60000);
+
+/* ── TRAFFIC LAYER (TomTom) ── */
+const TOMTOM_KEY = '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO'; // domain-restricted in TomTom dashboard
+let trafficLayer = null;
+let trafficOn = false;
+
+function buildTrafficLayer() {
+  return L.tileLayer(
+    `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_KEY}`,
+    { maxZoom: 19, opacity: 0.75 }
+  );
+}
+
+document.getElementById('trafficBtn').addEventListener('click', () => {
+  trafficOn = !trafficOn;
+  const btn = document.getElementById('trafficBtn');
+  if (trafficOn) {
+    trafficLayer = buildTrafficLayer().addTo(map);
+    btn.style.background = 'rgba(239,68,68,.25)';
+    btn.style.borderColor = 'rgba(239,68,68,.4)';
+  } else {
+    if (trafficLayer) map.removeLayer(trafficLayer);
+    btn.style.background = '';
+    btn.style.borderColor = '';
+  }
+});
 
 /* ── PROFILE CARD ── */
 function toggleProfileCard() {
@@ -1491,7 +1517,7 @@ searchInput.addEventListener('input', function() {
   renderSearchResults(jeepMatches, placeMatches, q);
 
   clearTimeout(geocodeTimer);
-  if (q.length < 3) { placeMatches = []; renderSearchResults(jeepMatches, placeMatches, q); return; }
+  if (q.length < 2) { placeMatches = []; renderSearchResults(jeepMatches, placeMatches, q); return; }
   geocodeTimer = setTimeout(async () => {
     placeMatches = await searchLocations(q);
     renderSearchResults(jeepMatches, placeMatches, searchInput.value.trim());
