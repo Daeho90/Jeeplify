@@ -1632,36 +1632,95 @@ async function drawRoute() {
 
   document.getElementById('ricHint').textContent = 'Calculating route…';
   try {
+    // traffic=true + sectionType=traffic gives per-segment congestion data.
+    // Traffic data only applies meaningfully to 'car' mode; TomTom still
+    // accepts the params for pedestrian but sections will just come back empty.
     const url = `https://api.tomtom.com/routing/1/calculateRoute/` +
       `${userOrigin.lat},${userOrigin.lng}:${destLat},${destLng}/json` +
-      `?key=${TOMTOM_KEY}&travelMode=${currentRouteMode}&routeType=fastest`;
+      `?key=${TOMTOM_KEY}&travelMode=${currentRouteMode}&routeType=fastest` +
+      `&traffic=true&sectionType=traffic`;
     const res  = await fetch(url);
     const data = await res.json();
     const route = data.routes?.[0];
     if (!route) throw new Error('No route found');
 
-    const summary = route.legs[0].points ? route : route; // routes[0] holds legs
     const coords = [];
     route.legs.forEach(leg => leg.points.forEach(p => coords.push([p.longitude, p.latitude])));
 
-    const geojson = {
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates: coords },
+    // Traffic color scale, same idea as Google Maps' green/yellow/red bands
+    const TRAFFIC_COLORS = {
+      0: '#10b981', // free flow
+      1: '#f59e0b', // minor delay
+      2: '#f97316', // moderate delay
+      3: '#ef4444', // heavy delay
+      4: '#7f1d1d', // severe / road closed
     };
 
+    const trafficSections = (route.sections || []).filter(s => s.sectionType === 'TRAFFIC');
+    const features = [];
+
+    if (currentRouteMode === 'car' && trafficSections.length) {
+      // Walk the route and color each stretch by its traffic magnitude.
+      // Any point range not covered by a TRAFFIC section is free-flow (green).
+      let cursor = 0;
+      const sorted = [...trafficSections].sort((a,b) => a.startPointIndex - b.startPointIndex);
+      sorted.forEach(sec => {
+        if (sec.startPointIndex > cursor) {
+          features.push({
+            type: 'Feature',
+            properties: { color: TRAFFIC_COLORS[0] },
+            geometry: { type: 'LineString', coordinates: coords.slice(cursor, sec.startPointIndex + 1) },
+          });
+        }
+        const mag = sec.magnitudeOfDelay ?? 0;
+        features.push({
+          type: 'Feature',
+          properties: { color: TRAFFIC_COLORS[mag] || TRAFFIC_COLORS[0] },
+          geometry: { type: 'LineString', coordinates: coords.slice(sec.startPointIndex, sec.endPointIndex + 1) },
+        });
+        cursor = sec.endPointIndex;
+      });
+      if (cursor < coords.length - 1) {
+        features.push({
+          type: 'Feature',
+          properties: { color: TRAFFIC_COLORS[0] },
+          geometry: { type: 'LineString', coordinates: coords.slice(cursor) },
+        });
+      }
+    } else {
+      // Walking mode (or no traffic data): single solid color, as before
+      features.push({
+        type: 'Feature',
+        properties: { color: currentRouteMode === 'pedestrian' ? '#3b82f6' : '#10b981' },
+        geometry: { type: 'LineString', coordinates: coords },
+      });
+    }
+
+    const geojson = { type: 'FeatureCollection', features };
+
     if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+    if (map.getLayer(routeLayerId + '-casing')) map.removeLayer(routeLayerId + '-casing');
     if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
     map.addSource(routeSourceId, { type: 'geojson', data: geojson });
+
+    // Dark casing underneath for a bold, "popped" look
+    map.addLayer({
+      id: routeLayerId + '-casing',
+      type: 'line',
+      source: routeSourceId,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#0a1020', 'line-width': 11, 'line-opacity': 0.6 },
+    });
+    // Colored traffic-aware line on top, using each feature's own color
     map.addLayer({
       id: routeLayerId,
       type: 'line',
       source: routeSourceId,
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
-        'line-color': currentRouteMode === 'pedestrian' ? '#3b82f6' : '#f59e0b',
-        'line-width': 5,
-        'line-opacity': 0.85,
-        'line-dasharray': currentRouteMode === 'pedestrian' ? [1, 1.4] : [1],
+        'line-color': ['get', 'color'],
+        'line-width': 7,
+        'line-opacity': 0.95,
       },
     });
 
@@ -1669,9 +1728,10 @@ async function drawRoute() {
     const mins   = Math.round(route.summary.travelTimeInSeconds / 60);
     document.getElementById('ricDistance').textContent = `${distKm} km`;
     document.getElementById('ricDuration').textContent  = `${mins} min`;
-    document.getElementById('ricHint').textContent = 'Route updates automatically as the jeepney moves.';
+    document.getElementById('ricHint').textContent = currentRouteMode === 'car'
+      ? 'Route colored by live traffic — green is clear, red is heavy.'
+      : 'Route updates automatically as the jeepney moves.';
 
-    // Fit map to show both points
     const bounds = new tt.LngLatBounds();
     coords.forEach(c => bounds.extend(c));
     map.fitBounds(bounds, { padding: 80, duration: 500 });
