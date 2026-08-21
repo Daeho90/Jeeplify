@@ -303,16 +303,16 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 .hb-ring{
   position:absolute;inset:0;
   border-radius:50%;
-  border:2px solid var(--pulse-color);
+  background:radial-gradient(circle, var(--pulse-color) 0%, transparent 68%);
   opacity:0;
-  animation:hb-beat 2s ease-out infinite;
+  animation:hb-beat 2.6s cubic-bezier(.25,.6,.35,1) infinite;
 }
-.hb-ring:nth-child(2){animation-delay:.22s;}
+.hb-ring:nth-child(2){animation-delay:.87s;}
+.hb-ring:nth-child(3){animation-delay:1.74s;}
 @keyframes hb-beat{
-  0%       { transform:scale(.3); opacity:.9; }
-  40%,100% { transform:scale(1);  opacity:0;  }
+  0%       { transform:scale(.35); opacity:.55; }
+  100%     { transform:scale(1.15); opacity:0;  }
 }
-
 /* ── ETA CARD ── */
 .eta-card{
   margin:10px 14px 0;
@@ -725,7 +725,8 @@ function makeDriverEl() {
   const el = document.createElement('div');
   el.style.cssText = 'position:relative;width:35px;height:35px;';
   el.innerHTML = `
-    <div class="hb-wrap">
+        <div class="hb-wrap">
+      <div class="hb-ring"></div>
       <div class="hb-ring"></div>
       <div class="hb-ring"></div>
     </div>
@@ -764,7 +765,7 @@ function smoothMoveTo(rawLat, rawLng) {
     const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
     const curLat = start[0] + (end[0] - start[0]) * ease;
     const curLng = start[1] + (end[1] - start[1]) * ease;
-        driverMarker.setLngLat([curLng, curLat]);
+    driverMarker.setLngLat([curLng, curLat]);
     if (t < 1) {
       _animFrame = requestAnimationFrame(step);
     } else {
