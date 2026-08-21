@@ -1599,9 +1599,7 @@ document.getElementById('routeInfoCard').addEventListener('click', (e) => {
 function setOriginAndRoute(lat, lng) {
   userOrigin = { lat, lng };
   if (originMarker) originMarker.remove();
-  const el = document.createElement('div');
-  el.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 4px rgba(59,130,246,.3);';
-  originMarker = new tt.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+  originMarker = new tt.Marker({ element: makeUserEl(currentRouteMode) }).setLngLat([lng, lat]).addTo(map);
 
   const nearest = findNearestJeepney(lat, lng);
   if (!nearest) {
