@@ -188,6 +188,53 @@ if ($accountId) {
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
 
+
+        /* ── ROUTE TO JEEPNEY CARD ── */
+    .route-info-card {
+      position: absolute;
+      bottom: calc(100px + var(--safe-b));
+      left: 16px; right: 16px;
+      max-width: 380px; margin: 0 auto;
+      z-index: 25;
+      background: rgba(8,14,28,.97);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 14px 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      opacity: 0; transform: translateY(14px);
+      pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    .route-info-card.visible { opacity: 1; transform: translateY(0); pointer-events: all; }
+    .ric-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .ric-title { font-size: 12.5px; font-weight: 700; color: var(--text); }
+    .ric-close {
+      background: none; border: none; color: var(--muted);
+      font-size: 14px; cursor: pointer; padding: 2px 6px; flex-shrink: 0;
+    }
+    .ric-close:hover { color: var(--text); }
+    .ric-modes { display: flex; gap: 6px; margin-top: 10px; }
+    .ric-mode {
+      flex: 1; height: 34px; border-radius: 10px;
+      border: 1px solid var(--border2); background: rgba(255,255,255,.04);
+      color: var(--muted); font-size: 11.5px; font-weight: 700;
+      cursor: pointer; font-family: 'Montserrat', sans-serif;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .ric-mode.active {
+      background: rgba(59,130,246,.18); border-color: rgba(59,130,246,.4); color: #fff;
+    }
+    .ric-stats { display: flex; gap: 10px; margin-top: 10px; }
+    .ric-stat {
+      flex: 1; text-align: center; padding: 8px; border-radius: 10px;
+      background: var(--card); border: 1px solid var(--border);
+    }
+    .ric-stat span { display: block; font-size: 15px; font-weight: 800; color: var(--text); }
+    .ric-stat small { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .ric-hint { font-size: 10.5px; color: var(--muted); margin-top: 9px; line-height: 1.5; }
+
     /* ── BOTTOM NAV (pill) ── */
     .bottom-nav {
       position: absolute;
@@ -948,6 +995,9 @@ if ($accountId) {
       <button class="top-icon-btn" id="trafficBtn" title="Toggle traffic">
         <span id="trafficBtnIcon">🚦</span>
       </button>
+      <button class="top-icon-btn" id="locateBtn" title="Find nearest jeepney">
+        <span id="locateBtnIcon">📍</span>
+      </button>
     </div>
 
     <!-- LIVE COUNTER PILL -->
@@ -956,6 +1006,22 @@ if ($accountId) {
       <span id="liveCount">0 jeepneys live</span>
     </div>
 
+    <!-- ROUTE TO JEEPNEY CARD -->
+    <div class="route-info-card" id="routeInfoCard">
+      <div class="ric-top">
+        <div class="ric-title" id="ricTitle">Routing to nearest jeepney…</div>
+        <button class="ric-close" onclick="clearRouteToJeepney()">✕</button>
+      </div>
+      <div class="ric-modes">
+        <button class="ric-mode active" data-mode="pedestrian" onclick="setRouteMode('pedestrian')">🚶 Walk</button>
+        <button class="ric-mode" data-mode="car" onclick="setRouteMode('car')">🚗 Drive</button>
+      </div>
+      <div class="ric-stats">
+        <div class="ric-stat"><span id="ricDistance">—</span><small>distance</small></div>
+        <div class="ric-stat"><span id="ricDuration">—</span><small>ETA</small></div>
+      </div>
+      <div class="ric-hint" id="ricHint">Tap the map to set your starting point, or use GPS 📍</div>
+    </div>
     <!-- BOTTOM NAV -->
     <nav class="bottom-nav">
       <div class="nav-tab active" id="routesTab" onclick="setTab(this,'routes'); openSheet('routes');">
@@ -1465,6 +1531,170 @@ async function pollJeepneys() {
 }
 pollJeepneys();
 setInterval(pollJeepneys, 8000);
+
+
+/* ══════════════════════════════════════════════
+   ROUTE TO NEAREST JEEPNEY
+══════════════════════════════════════════════ */
+let userOrigin      = null;   // {lat, lng}
+let originMarker     = null;
+let routeLayerId     = 'route-to-jeep-layer';
+let routeSourceId    = 'route-to-jeep-source';
+let currentRouteMode = 'pedestrian'; // 'pedestrian' or 'car'
+let targetJeepId     = null;
+let mapClickArmed    = false;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function findNearestJeepney(lat, lng) {
+  let best = null, bestDist = Infinity;
+  Object.entries(jeepData).forEach(([id, d]) => {
+    if (d.stale) return; // skip offline units
+    const dLat = parseFloat(d.lat), dLng = parseFloat(d.lng);
+    if (!isFinite(dLat) || !isFinite(dLng)) return;
+    const dist = haversineKm(lat, lng, dLat, dLng);
+    if (dist < bestDist) { bestDist = dist; best = { id, d, dist }; }
+  });
+  return best;
+}
+
+// GPS button
+document.getElementById('locateBtn').addEventListener('click', () => {
+  if (!navigator.geolocation) { alert('GPS not available on this device.'); return; }
+  document.getElementById('locateBtnIcon').textContent = '⏳';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('locateBtnIcon').textContent = '📍';
+      setOriginAndRoute(pos.coords.latitude, pos.coords.longitude);
+    },
+    () => {
+      document.getElementById('locateBtnIcon').textContent = '📍';
+      alert('Could not get your location. Try tapping the map instead.');
+      armMapClick();
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+});
+
+// Manual pin: arm map-click mode, then listen once
+function armMapClick() {
+  mapClickArmed = true;
+  document.getElementById('ricHint').textContent = 'Tap anywhere on the map to set your starting point…';
+  document.getElementById('routeInfoCard').classList.add('visible');
+}
+map.on('click', (e) => {
+  if (!mapClickArmed) return;
+  mapClickArmed = false;
+  setOriginAndRoute(e.lngLat.lat, e.lngLat.lng);
+});
+// Long-press-ish: also allow tapping map anytime origin card is open with no origin set yet
+document.getElementById('routeInfoCard').addEventListener('click', (e) => {
+  if (e.target.id === 'ricHint' && !userOrigin) armMapClick();
+});
+
+function setOriginAndRoute(lat, lng) {
+  userOrigin = { lat, lng };
+  if (originMarker) originMarker.remove();
+  const el = document.createElement('div');
+  el.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 4px rgba(59,130,246,.3);';
+  originMarker = new tt.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+
+  const nearest = findNearestJeepney(lat, lng);
+  if (!nearest) {
+    document.getElementById('routeInfoCard').classList.add('visible');
+    document.getElementById('ricTitle').textContent = 'No jeepneys online right now';
+    document.getElementById('ricHint').textContent = 'Check back in a bit, or browse routes below.';
+    document.getElementById('ricDistance').textContent = '—';
+    document.getElementById('ricDuration').textContent = '—';
+    return;
+  }
+  targetJeepId = nearest.id;
+  document.getElementById('routeInfoCard').classList.add('visible');
+  document.getElementById('ricTitle').textContent = `Routing to ${nearest.d.unit_code || 'nearest jeepney'}`;
+  drawRoute();
+}
+
+function setRouteMode(mode) {
+  currentRouteMode = mode;
+  document.querySelectorAll('.ric-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (userOrigin && targetJeepId) drawRoute();
+}
+
+async function drawRoute() {
+  if (!userOrigin || !targetJeepId) return;
+  const d = jeepData[targetJeepId];
+  if (!d) return;
+  const destLat = parseFloat(d.lat), destLng = parseFloat(d.lng);
+
+  document.getElementById('ricHint').textContent = 'Calculating route…';
+  try {
+    const url = `https://api.tomtom.com/routing/1/calculateRoute/` +
+      `${userOrigin.lat},${userOrigin.lng}:${destLat},${destLng}/json` +
+      `?key=${TOMTOM_KEY}&travelMode=${currentRouteMode}&routeType=fastest`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!route) throw new Error('No route found');
+
+    const summary = route.legs[0].points ? route : route; // routes[0] holds legs
+    const coords = [];
+    route.legs.forEach(leg => leg.points.forEach(p => coords.push([p.longitude, p.latitude])));
+
+    const geojson = {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+    };
+
+    if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+    if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
+    map.addSource(routeSourceId, { type: 'geojson', data: geojson });
+    map.addLayer({
+      id: routeLayerId,
+      type: 'line',
+      source: routeSourceId,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': currentRouteMode === 'pedestrian' ? '#3b82f6' : '#f59e0b',
+        'line-width': 5,
+        'line-opacity': 0.85,
+        'line-dasharray': currentRouteMode === 'pedestrian' ? [1, 1.4] : [1],
+      },
+    });
+
+    const distKm = (route.summary.lengthInMeters / 1000).toFixed(1);
+    const mins   = Math.round(route.summary.travelTimeInSeconds / 60);
+    document.getElementById('ricDistance').textContent = `${distKm} km`;
+    document.getElementById('ricDuration').textContent  = `${mins} min`;
+    document.getElementById('ricHint').textContent = 'Route updates automatically as the jeepney moves.';
+
+    // Fit map to show both points
+    const bounds = new tt.LngLatBounds();
+    coords.forEach(c => bounds.extend(c));
+    map.fitBounds(bounds, { padding: 80, duration: 500 });
+  } catch (err) {
+    console.warn('Routing failed:', err);
+    document.getElementById('ricHint').textContent = 'Could not calculate route — try again.';
+  }
+}
+
+function clearRouteToJeepney() {
+  userOrigin = null; targetJeepId = null; mapClickArmed = false;
+  if (originMarker) { originMarker.remove(); originMarker = null; }
+  if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+  if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
+  document.getElementById('routeInfoCard').classList.remove('visible');
+}
+
+// Keep the route live: redraw every time the jeepney position updates
+const _originalPollJeepneys = pollJeepneys;
+setInterval(() => {
+  if (userOrigin && targetJeepId && jeepData[targetJeepId]) drawRoute();
+}, 8000);
+
 
 /* ── SEARCH (jeepneys + locations via Nominatim) ── */
 const searchInput   = document.getElementById('topSearch');
