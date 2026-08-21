@@ -15,8 +15,9 @@ if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'driver') {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="../fav.png"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel='stylesheet' type='text/css' href='https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css'/>
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+<script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/services/services-web.min.js"></script>
 <style>
 :root{
   --bg:     #0d1321;
@@ -40,7 +41,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 
 /* ── MAP ── */
 #map{position:fixed;inset:0;z-index:0;}
-.leaflet-container{background:#0d1321 !important;}
+#map, #map canvas{background:#0d1321 !important;}
 
 /* ── TOP BAR ── */
 .top-bar{
@@ -710,28 +711,30 @@ const BOOKINGS_POLL_TICK = 15_000;
 /* ─────────────────────────────────────────────────────────
    MAP SETUP
 ───────────────────────────────────────────────────────── */
-const map = L.map('map', { zoomControl: false }).setView(DEFAULT, 15);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© OpenStreetMap © CARTO',
-  subdomains: 'abcd',
-  maxZoom: 19
-}).addTo(map);
-L.control.zoom({ position: 'bottomright' }).addTo(map);
+const TOMTOM_KEY = '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO'; // same key as commuter.php
+const map = tt.map({
+  key: TOMTOM_KEY,
+  container: 'map',
+  center: [DEFAULT[1], DEFAULT[0]], // TomTom uses [lng, lat]
+  zoom: 15,
+});
+// No tt.NavigationControl added — matches the zoomControl:false setup above.
 
 /* ── Driver marker with heartbeat rings ── */
-const driverIcon = L.divIcon({
-  html: `<div style="position:relative;width:35px;height:35px;">
-           <div class="hb-wrap">
-             <div class="hb-ring"></div>
-             <div class="hb-ring"></div>
-           </div>
-           <img src="Modern.png" style="width:35px;height:35px;display:block;">
-         </div>`,
-  className:  '',
-  iconSize:   [35, 35],
-  iconAnchor: [24, 24]
-});
-let driverMarker = L.marker(DEFAULT, { icon: driverIcon }).addTo(map);
+function makeDriverEl() {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:relative;width:35px;height:35px;';
+  el.innerHTML = `
+    <div class="hb-wrap">
+      <div class="hb-ring"></div>
+      <div class="hb-ring"></div>
+    </div>
+    <img src="Modern.png" style="width:35px;height:35px;display:block;">`;
+  return el;
+}
+let driverMarker = new tt.Marker({ element: makeDriverEl() })
+  .setLngLat([DEFAULT[1], DEFAULT[0]])
+  .addTo(map);
 
 /* ─────────────────────────────────────────────────────────
    SMOOTH MOVEMENT
@@ -761,7 +764,7 @@ function smoothMoveTo(rawLat, rawLng) {
     const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
     const curLat = start[0] + (end[0] - start[0]) * ease;
     const curLng = start[1] + (end[1] - start[1]) * ease;
-    driverMarker.setLatLng([curLat, curLng]);
+        driverMarker.setLngLat([curLng, curLat]);
     if (t < 1) {
       _animFrame = requestAnimationFrame(step);
     } else {
@@ -1031,7 +1034,7 @@ function startGps() {
       if (!isFinite(lat) || !isFinite(lng)) return;
       pending = [lat, lng];
       smoothMoveTo(lat, lng);
-      map.panTo(pending, { animate: true });
+            map.panTo([lng, lat]);
       setGpsUI('on');
       if (gpsOn && currentTripId) calcETA(lat, lng);
     },
@@ -1277,10 +1280,11 @@ async function loadDriverData() {
       // BUG FIX: parse server values as floats before any use
       const lat = parseFloat(data.last_location.lat);
       const lng = parseFloat(data.last_location.lng);
-      if (isFinite(lat) && isFinite(lng)) {
+           if (isFinite(lat) && isFinite(lng)) {
         _currentPos = [lat, lng];
-        driverMarker.setLatLng([lat, lng]);
-        map.setView([lat, lng], 16);
+        driverMarker.setLngLat([lng, lat]);
+        map.setCenter([lng, lat]);
+        map.setZoom(16);
       }
     }
   } catch (e) {
