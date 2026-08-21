@@ -1483,12 +1483,25 @@ async function searchLocations(q) {
   if (geocodeAbort) geocodeAbort.abort();
   geocodeAbort = new AbortController();
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&viewbox=${BACOLOD_VIEWBOX}&bounded=0&limit=5&addressdetails=0`;
-    const res = await fetch(url, { signal: geocodeAbort.signal, headers: { 'Accept-Language': 'en' } });
+    const center = map.getCenter(); // biases results to what's currently on screen
+    const url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(q)}.json` +
+      `?key=${TOMTOM_KEY}` +
+      `&lat=${center.lat}&lon=${center.lng}` +
+      `&radius=20000&limit=5&typeahead=true&countrySet=PH`;
+    const res = await fetch(url, { signal: geocodeAbort.signal });
     if (!res.ok) return [];
-    return await res.json();
+    const data = await res.json();
+    // Normalize to the same shape the old Nominatim code expected,
+    // so renderSearchResults / selectPlaceResult need no changes.
+    return (data.results || []).map(r => ({
+      lat: r.position.lat,
+      lon: r.position.lon,
+      display_name: r.poi?.name
+        ? `${r.poi.name}, ${r.address?.freeformAddress || ''}`
+        : (r.address?.freeformAddress || 'Unknown place'),
+    }));
   } catch (e) {
-    if (e.name !== 'AbortError') console.warn('Geocode failed:', e);
+    if (e.name !== 'AbortError') console.warn('TomTom search failed:', e);
     return [];
   }
 }
@@ -1571,7 +1584,7 @@ searchInput.addEventListener('input', function() {
 
   clearTimeout(geocodeTimer);
   if (q.length < 2) { placeMatches = []; renderSearchResults(jeepMatches, placeMatches, q); return; }
-  geocodeTimer = setTimeout(async () => {
+    geocodeTimer = setTimeout(async () => {
     placeMatches = await searchLocations(q);
     renderSearchResults(jeepMatches, placeMatches, searchInput.value.trim());
   }, 450);
