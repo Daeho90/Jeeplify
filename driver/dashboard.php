@@ -421,82 +421,30 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
   font-family:'Montserrat',sans-serif;cursor:pointer;
 }
 
-/* ── DESKTOP SIDEBAR ── */
+/* ── DESKTOP */
 @media(min-width:768px){
-  .top-bar,.sheet{display:none;}
-  #map{left:300px;}
-
-  .sidebar{
-    display:flex !important;
-    position:fixed;top:0;left:0;bottom:0;width:300px;
-    z-index:200;background:var(--panel);
-    backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-    border-right:1px solid var(--border);
-    flex-direction:column;overflow-y:auto;
-  }
-  .sb-head{
-    padding:18px 16px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
-  }
-  .sb-brand{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
-  .sb-brand .bicon{
-    width:38px;height:38px;border-radius:11px;
-    background:linear-gradient(135deg,#0284c7,#0ea5e9);
-    display:flex;align-items:center;justify-content:center;font-size:16px;
-  }
-  .sb-brand h2{font-size:13px;font-weight:700;}
-  .sb-brand small{font-size:10px;color:var(--muted);display:block;margin-top:1px;}
-
-  .sb-profile{
-    background:var(--card);border:1px solid var(--border);
-    border-radius:10px;padding:10px 12px;
-    display:flex;align-items:center;gap:9px;
-  }
-  .sb-avatar{
-    width:34px;height:34px;border-radius:9px;flex-shrink:0;
-    background:linear-gradient(135deg,rgba(14,165,233,.25),rgba(14,165,233,.10));
-    border:1px solid rgba(14,165,233,.22);
-    display:flex;align-items:center;justify-content:center;font-size:15px;
-  }
-  .sb-profile-name{font-size:12px;font-weight:700;color:var(--text);}
-  .sb-profile-sub{font-size:10px;color:var(--muted);margin-top:1px;}
-
-  .sb-body{padding:12px 14px;flex:1;overflow-y:auto;}
-  .sb-label{
-    font-size:9px;font-weight:700;text-transform:uppercase;
-    color:var(--muted);letter-spacing:.5px;margin:14px 0 5px;
-  }
-  .sb-card{
-    background:var(--card);border:1px solid var(--border);
-    border-radius:10px;padding:11px 13px;font-size:12px;
-  }
-  .sb-row{display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;}
-  .sb-row .val{font-weight:700;color:var(--text);}
-  .sb-sep{height:1px;background:var(--border);margin:2px 0;}
-
-  .sb-status-grid{
-    display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:5px;
+  #map{left:0;}
+  #map canvas{
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
   }
 
-  .sb-footer{
-    border-top:1px solid var(--border);padding:12px 14px;flex-shrink:0;
-    display:flex;flex-direction:column;gap:8px;
+  .top-bar{
+    left:50%;right:auto;
+    transform:translateX(-50%);
+    max-width:420px;width:100%;
+    justify-content:center;
   }
-  .sb-gps-row{
-    display:flex;align-items:center;gap:8px;
-    font-size:11px;color:var(--muted);
+
+  .sheet{
+    left:50%;right:auto;
+    width:100%;max-width:420px;
+    border-radius:22px 22px 0 0;
+    transform:translateX(-50%) translateY(calc(100% - var(--peek)));
+    box-shadow:0 -20px 60px rgba(0,0,0,.5);
   }
-  .sb-logout{
-    height:34px;border-radius:8px;
-    border:1px solid rgba(239,68,68,.22);
-    background:rgba(239,68,68,.07);
-    color:rgba(239,68,68,.80);
-    font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;
-    cursor:pointer;
-    transition:background .2s,color .2s;
-    display:flex;align-items:center;justify-content:center;gap:6px;
+  .sheet.open{
+    transform:translateX(-50%) translateY(0);
   }
-  .sb-logout:hover{background:rgba(239,68,68,.15);color:var(--red);}
-  .sb-logout svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
   .overlay,.confirm-overlay{align-items:center;}
   .loc-card,.confirm-card{border-radius:22px;max-width:360px;margin:auto;padding:28px 26px;}
@@ -597,85 +545,6 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
   </div>
 </div>
 
-<!-- SIDEBAR (desktop) -->
-<aside class="sidebar" style="display:none;">
-  <div class="sb-head">
-    <div class="sb-brand">
-      <div class="bicon">🚌</div>
-      <div>
-        <h2>Bacolod Jeepney Tracker</h2>
-        <small>Driver Portal</small>
-      </div>
-    </div>
-    <div class="sb-profile">
-      <div class="sb-avatar">👤</div>
-      <div>
-        <div class="sb-profile-name" id="sbName"><span class="skel w60"></span></div>
-        <div class="sb-profile-sub">Driver</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="sb-body">
-    <div class="sb-label">Trip Status</div>
-    <div class="sb-status-grid">
-      <button class="status-btn" data-status="on_route"    onclick="setTripStatus('on_route',event)">
-        <span class="sico">🟢</span><span class="stxt">On Route</span>
-      </button>
-      <button class="status-btn" data-status="traffic"     onclick="setTripStatus('traffic',event)">
-        <span class="sico">🚦</span><span class="stxt">Traffic</span>
-      </button>
-      <button class="status-btn" data-status="maintenance" onclick="setTripStatus('maintenance',event)">
-        <span class="sico">⚠️</span><span class="stxt">Maintenance</span>
-      </button>
-      <button class="status-btn" data-status="complete"    onclick="setTripStatus('complete',event)">
-        <span class="sico">☑️</span><span class="stxt">Complete Trip</span>
-      </button>
-    </div>
-
-    <!-- ETA CARD (desktop) -->
-    <div class="sb-label">ETA</div>
-    <div class="sb-card" id="sbEtaCard">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:22px;font-weight:800;" id="sbEtaValue">—</span>
-        <span style="font-size:11px;font-weight:700;color:var(--accent);" id="sbEtaDist">—</span>
-      </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;" id="sbEtaSub">Waiting for GPS…</div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:8px;" id="sbEtaDir">—</div>
-      <button class="dir-toggle" style="width:100%;justify-content:center;" onclick="toggleDirection(event)">⇄ Flip Direction</button>
-    </div>
-
-    <div class="sb-label">Assigned Jeepney</div>
-    <div class="sb-card" id="sbJeepCard"><span class="skel w40"></span></div>
-
-    <div class="sb-label">Next / Active Trip</div>
-    <div class="sb-card" id="sbTripCard">
-      <span class="skel w80"></span>
-      <span class="skel w60" style="display:block;margin-top:8px;"></span>
-    </div>
-
-    <div class="sb-label">Upcoming Bookings</div>
-    <div class="sb-card" id="sbBookingsCard">
-      <span class="skel w80"></span>
-      <span class="skel w60" style="display:block;margin-top:8px;"></span>
-    </div>
-  </div><!-- /.sb-body -->
-
-  <div class="sb-footer">
-    <div class="sb-gps-row">
-      <div class="pip" id="pipDesk"></div>
-      <span id="gpsLblDesk">Location not shared</span>
-    </div>
-    <button class="gps-toggle" id="gpsBtnDesk" onclick="toggleGps(event)" style="width:100%;justify-content:center;">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
-      <span id="gpsBtnDeskLbl">GPS Off</span>
-    </button>
-    <button class="sb-logout" onclick="handleLogout()">
-      <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      Logout
-    </button>
-  </div>
-</aside>
 
 <!-- LOCATION MODAL -->
 <div class="overlay" id="locOverlay">
