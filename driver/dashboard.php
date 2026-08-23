@@ -296,10 +296,11 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 .hb-wrap{
   position:absolute;
   width:60px;height:60px;
-  top:calc(-30px + 24px);
-  left:calc(-30px + 24px);
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
   pointer-events:none;
 }
+
 .hb-ring{
   position:absolute;inset:0;
   border-radius:50%;
@@ -716,26 +717,70 @@ const map = tt.map({
   key: TOMTOM_KEY,
   container: 'map',
   center: [DEFAULT[1], DEFAULT[0]], // TomTom uses [lng, lat]
-  zoom: 15,
+  zoom: 17,
+  pitch: 60,
+  bearing: 0,
 });
 // No tt.NavigationControl added — matches the zoomControl:false setup above.
 
 /* ── Driver marker with heartbeat rings ── */
 function makeDriverEl() {
   const el = document.createElement('div');
-  el.style.cssText = 'position:relative;width:35px;height:35px;';
+  el.style.cssText = 'position:relative;width:35px;height:35px;display:flex;align-items:center;justify-content:center;';
   el.innerHTML = `
-        <div class="hb-wrap">
+    <div class="hb-wrap">
       <div class="hb-ring"></div>
       <div class="hb-ring"></div>
       <div class="hb-ring"></div>
     </div>
-    <img src="Modern.png" style="width:35px;height:35px;display:block;">`;
+    <img src="Modern.png" style="width:35px;height:35px;display:block;position:relative;z-index:1;">`;
   return el;
 }
-let driverMarker = new tt.Marker({ element: makeDriverEl() })
+let driverMarker = new tt.Marker({ element: makeDriverEl(), anchor: 'center' })
   .setLngLat([DEFAULT[1], DEFAULT[0]])
   .addTo(map);
+
+  function bearingBetween(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+
+map.on('load', () => {
+  map.showTrafficFlow();
+  map.showTrafficIncidents();
+
+  const routeGeojson = {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: ROUTE_COORDS.map(([lat, lng]) => [lng, lat]),
+    },
+  };
+
+  map.addSource('driver-route-source', { type: 'geojson', data: routeGeojson });
+
+  map.addLayer({
+    id: 'driver-route-casing',
+    type: 'line',
+    source: 'driver-route-source',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#000814', 'line-width': 8, 'line-opacity': 0.4 },
+  });
+  map.addLayer({
+    id: 'driver-route-line',
+    type: 'line',
+    source: 'driver-route-source',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#0ea5e9', 'line-width': 4, 'line-opacity': 0.55 },
+  });
+});
+
 
 /* ─────────────────────────────────────────────────────────
    SMOOTH MOVEMENT
@@ -751,6 +796,15 @@ function smoothMoveTo(rawLat, rawLng) {
   if (!isFinite(lat) || !isFinite(lng)) {
     console.warn('smoothMoveTo: invalid coords', rawLat, rawLng);
     return;
+  }
+
+  // Rotate the whole camera to face the direction of travel (Waze/Google
+  // Maps nav-mode style). Only rotate if we've moved a meaningful distance,
+  // so GPS jitter at a standstill doesn't spin the map randomly.
+  const movedDist = haversine(_currentPos, [lat, lng]);
+  if (movedDist > 0.003) { // ~3 meters
+    const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
+    map.easeTo({ bearing: heading, pitch: 60, duration: 900 });
   }
 
   const start     = [_currentPos[0], _currentPos[1]];
@@ -1035,7 +1089,7 @@ function startGps() {
       if (!isFinite(lat) || !isFinite(lng)) return;
       pending = [lat, lng];
       smoothMoveTo(lat, lng);
-            map.panTo([lng, lat]);
+      map.easeTo({ center: [lng, lat], duration: 900 });
       setGpsUI('on');
       if (gpsOn && currentTripId) calcETA(lat, lng);
     },
