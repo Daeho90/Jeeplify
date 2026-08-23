@@ -423,17 +423,60 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 
 /* ── DESKTOP */
 @media (min-width:680px) and (orientation:landscape){
-  :root{ --peek: 130px; }
+  :root{ --shelf-peek:108px; --shelf-open:300px; }
 
   .sheet{
-    left:50%; right:auto;
-    width:min(420px, 92vw);
-    max-height:min(calc(100dvh - 80px), 640px);
-    transform:translateX(-50%) translateY(calc(100% - var(--peek)));
+    left:0; right:0; bottom:0; width:100%; max-width:none;
+    border-radius:18px 18px 0 0;
+    transform:none;
+    height:var(--shelf-peek);
+    max-height:var(--shelf-peek);
+    overflow:hidden;
+    transition:height .38s cubic-bezier(.22,1,.36,1), max-height .38s cubic-bezier(.22,1,.36,1);
     box-shadow:0 -20px 60px rgba(0,0,0,.5);
+    display:flex;
+    flex-wrap:wrap;
+    align-content:flex-start;
+    gap:8px 12px;
+    padding:10px 14px 14px;
   }
   .sheet.open{
-    transform:translateX(-50%) translateY(0);
+    height:var(--shelf-open);
+    max-height:var(--shelf-open);
+  }
+
+  .handle{ display:none; }
+
+  .sheet .profile-card,
+  .sheet .status-panel,
+  .sheet .eta-card{
+    margin:0; flex:0 0 auto;
+  }
+  .profile-card{ width:250px; }
+  .status-panel{ width:220px; }
+  .status-panel .status-panel-label{ margin-bottom:5px; }
+  .eta-card{ width:230px; }
+
+  .sheet-body{
+    flex:0 0 100%;
+    order:10;
+    display:grid;
+    grid-auto-flow:column;
+    grid-template-rows:auto 1fr;
+    grid-auto-columns:190px;
+    gap:0 12px;
+    padding:0;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sheet-body .slabel{ margin:0 0 6px; }
+  .sheet-body .icard{ height:100%; overflow-y:auto; }
+  .sheet-body .logout-btn{
+    grid-row:1 / span 2;
+    align-self:center;
+    width:130px;
+    margin:0;
   }
 
   .overlay,.confirm-overlay{ align-items:center; }
