@@ -423,37 +423,18 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 
 /* ── DESKTOP */
 @media (min-width:680px) and (orientation:landscape){
-  :root{ --panel-w: clamp(300px, 30vw, 380px); }
-
-  #map{ right:var(--panel-w); left:0; }
-  #map canvas{
-    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
-  }
-
-  .top-bar{
-    left:0; right:var(--panel-w);
-    transform:none;
-    max-width:none;
-    justify-content:space-between;
-  }
+  :root{ --peek: 130px; }
 
   .sheet{
-    top:0; bottom:0; left:auto; right:0;
-    width:var(--panel-w); max-width:var(--panel-w);
-    height:100dvh; max-height:100dvh;
-    border-radius:0;
-    border-top:none;
-    border-left:1px solid var(--border);
-    box-shadow:-20px 0 60px rgba(0,0,0,.5);
-    transform:none;
-    display:flex;
-    flex-direction:column;
+    left:50%; right:auto;
+    width:min(420px, 92vw);
+    max-height:min(calc(100dvh - 80px), 640px);
+    transform:translateX(-50%) translateY(calc(100% - var(--peek)));
+    box-shadow:0 -20px 60px rgba(0,0,0,.5);
   }
-  .sheet.open{ transform:none; }
-
-  .handle,.chevron{ display:none; }
-  .profile-card{ cursor:default; }
-  .sheet-body{ flex:1; overflow-y:auto; }
+  .sheet.open{
+    transform:translateX(-50%) translateY(0);
+  }
 
   .overlay,.confirm-overlay{ align-items:center; }
   .loc-card,.confirm-card{ border-radius:22px; max-width:360px; margin:auto; padding:28px 26px; }
