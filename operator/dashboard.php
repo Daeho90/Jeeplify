@@ -1070,14 +1070,15 @@ function showToast(msg, type = 'success', duration = 3000) {
 // ─────────────────────────────────────────────────────────────
 // MAP
 // ─────────────────────────────────────────────────────────────
-let _map = null;
 function initMap() {
   _map = tt.map({
     key: '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO',
     container: 'map',
-    center: [122.9509, 10.6765], // TomTom uses [lng, lat], reversed from Leaflet
+    center: [122.9509, 10.6765],
     zoom: 13,
-    style: 'tomtom://vector/1/basic-night'
+    style: {
+      map: '2/basic_dark'
+    }
   });
 }
 // ─────────────────────────────────────────────────────────────
