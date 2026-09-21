@@ -1544,6 +1544,7 @@ async function _opPollJeepneys() {
     if (!body.ok) return;
     const seen = new Set();
     body.jeepneys.forEach(d => {
+      if (d.lat == null || d.lng == null || isNaN(d.lat) || isNaN(d.lng)) return; // skip invalid coords
       seen.add(d.account_id);
       _opData[d.account_id] = d;
       if (_opMarkers[d.account_id]) {
