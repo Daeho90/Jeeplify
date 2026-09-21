@@ -1075,10 +1075,7 @@ function initMap() {
     key: '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO',
     container: 'map',
     center: [122.9509, 10.6765],
-    zoom: 13,
-    style: {
-      map: '2/basic_dark'
-    }
+    zoom: 13
   });
 }
 // ─────────────────────────────────────────────────────────────
