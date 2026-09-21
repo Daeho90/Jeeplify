@@ -133,9 +133,12 @@ $displayName = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_nam
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="icon" type="image/png" href="fav.png"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps.css"/>
+  <script src="https://api.tomtom.com/maps-sdk-for-web/cdn/6.x/6.25.0/maps/maps-web.min.js"></script>
+ 
+  
+  
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -164,7 +167,7 @@ $displayName = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_nam
     }
 
     #map { position: absolute; inset: 0; z-index: 0; }
-    .leaflet-control-attribution { display: none !important; }
+
 
     .header-pill {
       position: fixed; top: 16px; left: 50%;
@@ -496,10 +499,9 @@ $displayName = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_nam
     .sheet::-webkit-scrollbar-track { background: transparent; }
     .sheet::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
 
-    .leaflet-popup-content-wrapper { background:#0D111A!important; border:1px solid rgba(255,255,255,0.08)!important; border-radius:12px!important; box-shadow:0 8px 32px rgba(0,0,0,0.5)!important; padding:0!important; }
-    .leaflet-popup-content { margin:0!important; }
-    .leaflet-popup-tip { background:#0D111A!important; }
-    .leaflet-popup-close-button { color:#64748b!important; top:6px!important; right:8px!important; }
+    .mapboxgl-popup-content { background:#0D111A!important; border:1px solid rgba(255,255,255,0.08)!important; border-radius:12px!important; box-shadow:0 8px 32px rgba(0,0,0,0.5)!important; padding:0!important; }
+    .mapboxgl-popup-tip { border-top-color:#0D111A!important; border-bottom-color:#0D111A!important; }
+    .mapboxgl-popup-close-button { color:#64748b!important; font-size:16px; }
 
     /* ── DISPATCH MODAL ── */
     .dispatch-overlay {
@@ -1070,10 +1072,14 @@ function showToast(msg, type = 'success', duration = 3000) {
 // ─────────────────────────────────────────────────────────────
 let _map = null;
 function initMap() {
-  _map = L.map('map', { zoomControl: false }).setView([10.6765, 122.9509], 13);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd' }).addTo(_map);
+  _map = tt.map({
+    key: '2YJdW1w9sE4xkaSAkFUCf655UVpMAEvO',
+    container: 'map',
+    center: [122.9509, 10.6765], // TomTom uses [lng, lat], reversed from Leaflet
+    zoom: 13,
+    style: 'tomtom://vector/1/basic-night'
+  });
 }
-
 // ─────────────────────────────────────────────────────────────
 // TAB LOGIC
 // ─────────────────────────────────────────────────────────────
@@ -1506,16 +1512,16 @@ function createDriver() {
 // ─────────────────────────────────────────────────────────────
 // LIVE MAP POLLING
 // ─────────────────────────────────────────────────────────────
-const _opMarkers = {}, _opData = {};
+const _opMarkers = {}, _opData = {}, _opPopups = {};
 
-function _opJeepIcon(direction, stale) {
+function _opJeepElement(direction, stale) {
   const opacity = stale ? '0.45' : '1';
   const flip    = direction === 'reverse' ? 'scaleX(-1)' : 'scaleX(1)';
-  return L.divIcon({
-    className: '',
-    html: `<img src="Modern.png" style="width:38px;height:38px;transform:${flip};opacity:${opacity};transform-origin:center;">`,
-    iconSize:[38,38], iconAnchor:[19,19], popupAnchor:[0,-22]
-  });
+  const el = document.createElement('div');
+  el.style.width = '38px';
+  el.style.height = '38px';
+  el.innerHTML = `<img src="Modern.png" style="width:38px;height:38px;transform:${flip};opacity:${opacity};transform-origin:center;">`;
+  return el;
 }
 
 function _opPopup(d) {
@@ -1543,17 +1549,21 @@ async function _opPollJeepneys() {
       seen.add(d.account_id);
       _opData[d.account_id] = d;
       if (_opMarkers[d.account_id]) {
-        _opMarkers[d.account_id].setLatLng([d.lat, d.lng]);
-        _opMarkers[d.account_id].setIcon(_opJeepIcon(d.direction, d.stale));
-        if (_opMarkers[d.account_id].isPopupOpen())
-          _opMarkers[d.account_id].setPopupContent(_opPopup(d));
+        _opMarkers[d.account_id].setLngLat([d.lng, d.lat]);
+        _opMarkers[d.account_id].getElement().innerHTML =
+          `<img src="Modern.png" style="width:38px;height:38px;transform:${d.direction==='reverse'?'scaleX(-1)':'scaleX(1)'};opacity:${d.stale?'0.45':'1'};transform-origin:center;">`;
+        if (_opPopups[d.account_id].isOpen()) _opPopups[d.account_id].setHTML(_opPopup(d));
       } else {
-        _opMarkers[d.account_id] = L.marker([d.lat,d.lng],{ icon:_opJeepIcon(d.direction,d.stale) })
-          .bindPopup(_opPopup(d),{ maxWidth:240 }).addTo(_map);
+        const popup = new tt.Popup({ offset: 30 }).setHTML(_opPopup(d));
+        _opPopups[d.account_id] = popup;
+        _opMarkers[d.account_id] = new tt.Marker({ element: _opJeepElement(d.direction, d.stale) })
+          .setLngLat([d.lng, d.lat])
+          .setPopup(popup)
+          .addTo(_map);
       }
     });
     Object.keys(_opMarkers).forEach(id => {
-      if (!seen.has(+id)) { _map.removeLayer(_opMarkers[id]); delete _opMarkers[id]; delete _opData[id]; }
+      if (!seen.has(+id)) { _opMarkers[id].remove(); delete _opMarkers[id]; delete _opData[id]; delete _opPopups[id]; }
     });
   } catch(e) { console.warn('Op map poll failed:', e); }
 }
