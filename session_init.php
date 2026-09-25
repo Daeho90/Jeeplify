@@ -18,7 +18,7 @@ class DbSessionHandler implements SessionHandlerInterface {
     public function close(): bool { return true; }
 
     public function read($id): string|false {
-        $stmt = $this->pdo->prepare("SELECT data FROM sessions WHERE id = ? LIMIT 1");
+        $stmt = $this->pdo->prepare("SELECT data FROM php_sessions WHERE id = ? LIMIT 1");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ? $row['data'] : '';
@@ -26,7 +26,7 @@ class DbSessionHandler implements SessionHandlerInterface {
 
     public function write($id, $data): bool {
         $stmt = $this->pdo->prepare("
-            INSERT INTO sessions (id, data, last_access)
+            INSERT INTO php_sessions (id, data, last_access)
             VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE data = VALUES(data), last_access = VALUES(last_access)
         ");
@@ -34,12 +34,12 @@ class DbSessionHandler implements SessionHandlerInterface {
     }
 
     public function destroy($id): bool {
-        $stmt = $this->pdo->prepare("DELETE FROM sessions WHERE id = ?");
+        $stmt = $this->pdo->prepare("DELETE FROM php_sessions WHERE id = ?");
         return $stmt->execute([$id]);
     }
 
     public function gc($max_lifetime): int|false {
-        $stmt = $this->pdo->prepare("DELETE FROM sessions WHERE last_access < ?");
+        $stmt = $this->pdo->prepare("DELETE FROM php_sessions WHERE last_access < ?");
         $stmt->execute([time() - $max_lifetime]);
         return $stmt->rowCount();
     }
