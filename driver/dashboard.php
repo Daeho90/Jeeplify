@@ -996,7 +996,11 @@ function startGps() {
       setGpsUI('on');
       if (gpsOn && currentTripId) calcETA(lat, lng);
     },
-    err => { console.warn('GPS error:', err); setGpsUI('err'); },
+    err => {
+  console.warn('GPS error:', err);
+  setGpsUI('err');
+  showToast(`GPS error ${err.code}: ${err.message}`, 'error');
+},
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
   );
   gpsTimer = setInterval(() => {
