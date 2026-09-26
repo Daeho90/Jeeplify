@@ -735,11 +735,11 @@ function smoothMoveTo(rawLat, rawLng) {
     const curLat = start[0] + (end[0] - start[0]) * ease;
     const curLng = start[1] + (end[1] - start[1]) * ease;
     driverMarker.setLngLat([curLng, curLat]);
+    _currentPos = [curLat, curLng];   // FIX: update every frame, not just on completion
     if (t < 1) {
       _animFrame = requestAnimationFrame(step);
     } else {
-      _currentPos = [lat, lng];
-      _animFrame  = null;
+      _animFrame = null;
     }
   }
   _animFrame = requestAnimationFrame(step);
