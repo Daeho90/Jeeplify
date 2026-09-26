@@ -49,7 +49,7 @@ try {
         LEFT JOIN driver_profiles dp ON dp.id = dj.driver_id
         LEFT JOIN routes          r  ON r.id  = j.route_id
         LEFT JOIN trips           t  ON t.jeepney_id = j.id
-                                    AND t.status = 'active'
+                                    AND t.status IN ('active','scheduled')
                                     AND DATE(t.departure_time) = CURDATE()
         ORDER BY j.unit_code
     ")->fetchAll();
@@ -106,6 +106,7 @@ try {
 } catch (Throwable $e) { error_log('drivers: '.$e->getMessage()); $drivers = []; }
 
 // ── AVAILABLE UNITS + ROUTES ──────────────────────────────────
+// available_units: unassigned units only — used by the "Create Driver" form.
 try {
     $available_units = $pdo->query("
         SELECT j.id, j.unit_code
@@ -116,6 +117,18 @@ try {
     ")->fetchAll();
     $routes = $pdo->query("SELECT id, name FROM routes ORDER BY name")->fetchAll();
 } catch (Throwable $e) { error_log('units/routes: '.$e->getMessage()); $available_units = []; $routes = []; }
+
+// edit_units: unassigned units PLUS each currently-assigned driver's own unit,
+// so the "Edit Driver" dropdown can show/keep a driver's existing jeep
+// (they'd otherwise be excluded by the "unassigned only" filter above).
+try {
+    $edit_units = $pdo->query("
+        SELECT j.id, j.unit_code
+        FROM   jeepneys j
+        LEFT JOIN driver_jeepney dj ON dj.jeepney_id = j.id
+        ORDER BY j.unit_code
+    ")->fetchAll();
+} catch (Throwable $e) { error_log('edit_units: '.$e->getMessage()); $edit_units = []; }
 
 // Avatar initials helper
 $avatarInitials = strtoupper(
@@ -917,7 +930,7 @@ $displayName = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_nam
           <label class="form-label">Assign Jeep</label>
           <select class="form-select" id="editDrvJeep">
             <option value="">— Select Unit —</option>
-            <?php foreach ($available_units as $unit): ?>
+            <?php foreach ($edit_units as $unit): ?>
             <option value="<?= $unit['id'] ?>"><?= htmlspecialchars($unit['unit_code']) ?></option>
             <?php endforeach; ?>
           </select>
@@ -926,7 +939,7 @@ $displayName = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_nam
             <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             <div class="custom-select-dropdown" id="csd-editDrvJeep">
               <div class="custom-select-option placeholder-opt" data-value="">— Select Unit —</div>
-              <?php foreach ($available_units as $unit): ?>
+              <?php foreach ($edit_units as $unit): ?>
               <div class="custom-select-option" data-value="<?= $unit['id'] ?>"><?= htmlspecialchars($unit['unit_code']) ?></div>
               <?php endforeach; ?>
             </div>
@@ -1490,6 +1503,7 @@ function createDriver() {
         </div>
         <div class="driver-actions">
           <button class="btn btn-ghost" onclick="editDriver(${res.driver_id})">Edit</button>
+          <button class="btn btn-red"   onclick="confirmRemoveDriver(${res.driver_id}, ${JSON.stringify(displayName)})">Remove</button>
         </div>`;
 
       const empty = document.querySelector('#driverList .empty-state');

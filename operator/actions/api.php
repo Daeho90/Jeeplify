@@ -287,10 +287,21 @@ function handle_edit_driver(PDO $pdo): void {
                 ->execute([$id, $unit_id]);
         }
 
-        // 3. Update route on the assigned jeepney if route was selected
-        if ($route_id && $unit_id) {
-            $pdo->prepare("UPDATE jeepneys SET route_id = ? WHERE id = ?")
-                ->execute([$route_id, $unit_id]);
+        // 3. Update route on the driver's jeepney if a route was selected.
+        // Decoupled from $unit_id: if the operator didn't touch the "Assign
+        // Jeep" field, fall back to the driver's *current* jeepney so a
+        // route-only change doesn't silently no-op.
+        if ($route_id) {
+            $targetUnitId = $unit_id;
+            if (!$targetUnitId) {
+                $curStmt = $pdo->prepare("SELECT jeepney_id FROM driver_jeepney WHERE driver_id = ? LIMIT 1");
+                $curStmt->execute([$id]);
+                $targetUnitId = (int) ($curStmt->fetchColumn() ?: 0);
+            }
+            if ($targetUnitId) {
+                $pdo->prepare("UPDATE jeepneys SET route_id = ? WHERE id = ?")
+                    ->execute([$route_id, $targetUnitId]);
+            }
         }
 
         // 4. Update password on the accounts table if provided
