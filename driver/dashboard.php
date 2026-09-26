@@ -1,6 +1,6 @@
 <?php
 require_once '../session_init.php';
-if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'driver') {
+if (empty($_SESSION['account_id']) || ($_SESSION['r'] ?? '') !== 'driver') {
     header('Location: ../index.php');
     exit;
 }
@@ -65,6 +65,15 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
   display:flex;align-items:center;justify-content:center;font-size:13px;
 }
 .brand-pill span{font-size:11px;font-weight:700;}
+
+
+.role-badge{
+  font-size:9px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--accent);
+  border:1px solid rgba(14,165,233,.35);
+  border-radius:20px;padding:3px 9px;
+  margin-left:1px;white-space:nowrap;
+}
 
 .gps-pill{
   display:flex;align-items:center;gap:6px;
@@ -492,9 +501,10 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 <!-- TOP BAR (mobile) -->
 <div class="top-bar">
   <div class="brand-pill">
-    <div class="bicon">🚌</div>
-    <span>Jeeplify Driver</span>
-  </div>
+  <div class="bicon">🚌</div>
+  <span>Bacolod Jeepney Tracker</span>
+  <span class="role-badge">DRIVER</span>
+</div>
   <div class="gps-pill">
     <div class="pip" id="pipMob"></div>
     <span id="gpsLblMob">No GPS</span>
