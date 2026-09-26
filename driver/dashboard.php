@@ -1,6 +1,6 @@
 <?php
 require_once '../session_init.php';
-if (empty($_SESSION['account_id']) || ($_SESSION['r'] ?? '') !== 'driver') {
+if (empty($_SESSION['account_id']) || ($_SESSION['role'] ?? '') !== 'driver') {
     header('Location: ../index.php');
     exit;
 }
