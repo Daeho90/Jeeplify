@@ -501,9 +501,9 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 <!-- TOP BAR (mobile) -->
 <div class="top-bar">
   <div class="brand-pill">
-  <div class="bicon">🚌</div>
-  <span>Bacolod Jeepney Tracker</span>
-  <span class="role-badge">DRIVER</span>
+   <img src="fav.png" alt="Logo">
+  <span class="title">Bacolod Jeepney Tracker</span>
+  <span class="badge">Driver</span>
 </div>
   <div class="gps-pill">
     <div class="pip" id="pipMob"></div>
