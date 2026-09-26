@@ -500,10 +500,12 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
 
 <!-- TOP BAR (mobile) -->
 <div class="top-bar">
-  <div class="brand-pill">
-   <img src="fav.png" alt="Logo">
+<div class="brand-pill">
+  <div class="bicon">
+    <img src="fav.png" alt="Logo" style="width:18px;height:18px;object-fit:contain;border-radius:4px;">
+  </div>
   <span class="title">Bacolod Jeepney Tracker</span>
-  <span class="badge">Driver</span>
+  <span class="role-badge">Driver</span>
 </div>
   <div class="gps-pill">
     <div class="pip" id="pipMob"></div>
