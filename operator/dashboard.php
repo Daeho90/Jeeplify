@@ -1524,61 +1524,92 @@ function createDriver() {
 // ─────────────────────────────────────────────────────────────
 // LIVE MAP POLLING
 // ─────────────────────────────────────────────────────────────
-const _opMarkers = {}, _opData = {}, _opPopups = {};
+const _opMarkers = {}, _opData = {}, _opPopups = {}, _opHeading = {}, _opLastPos = {};
 
-function _opJeepElement(direction, stale) {
-  const opacity = stale ? '0.45' : '1';
-  const flip    = direction === 'reverse' ? 'scaleX(-1)' : 'scaleX(1)';
+// Bearing in degrees (0 = north, 90 = east) between two coordinates
+function _bearing(lat1, lng1, lat2, lng2) {
+  const rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI;
+  const dLng = rad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(rad(lat2));
+  const x = Math.cos(rad(lat1)) * Math.sin(rad(lat2)) -
+            Math.sin(rad(lat1)) * Math.cos(rad(lat2)) * Math.cos(dLng);
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+
+// Rough distance in meters (good enough for "did it actually move?")
+function _distM(lat1, lng1, lat2, lng2) {
+  const dy = (lat2 - lat1) * 111320;
+  const dx = (lng2 - lng1) * 111320 * Math.cos(lat1 * Math.PI / 180);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Pick the shortest turn so the icon never spins the long way around
+function _unwrap(prev, next) {
+  return prev + ((((next - prev) % 360) + 540) % 360 - 180);
+}
+
+function _opJeepElement() {
   const el = document.createElement('div');
-  el.style.width = '38px';
-  el.style.height = '38px';
-  el.innerHTML = `<img src="Modern.png" style="width:38px;height:38px;transform:${flip};opacity:${opacity};transform-origin:center;">`;
+  el.style.width = el.style.height = '38px';
+  el.innerHTML = `<img src="Modern.png" style="width:38px;height:38px;transition:transform .6s ease, opacity .3s;transform-origin:center;">`;
   return el;
 }
 
-function _opPopup(d) {
-  const eta = d.eta_minutes != null
-    ? `<div style="margin-top:5px;font-size:11px;color:#22c55e">ETA ~${d.eta_minutes} min${d.eta_dist_km!=null?' · '+d.eta_dist_km+' km':''}</div>`
-    : '';
-  const staleTag = d.stale ? `<span style="font-size:10px;background:#1e293b;color:#64748b;padding:1px 6px;border-radius:999px;margin-left:4px">stale</span>` : '';
-  return `<div style="font-family:inherit;min-width:170px;padding:10px 12px">
-    <div style="font-weight:700;font-size:13px;color:#e2e8f0">${d.unit_code||'—'}${staleTag}</div>
-    <div style="font-size:11px;color:#64748b;margin-top:2px">${d.plate_no||''}${d.route_name?' · '+d.route_name:''}</div>
-    <div style="font-size:11px;color:#94a3b8;margin-top:2px">${d.driver_name||'Unknown driver'}</div>
-    ${eta}
-  </div>`;
+function _opApplyIcon(id, stale) {
+  const img = _opMarkers[id].getElement().querySelector('img');
+  img.style.transform = `rotate(${_opHeading[id] || 0}deg)`;
+  img.style.opacity = stale ? '0.45' : '1';
 }
 
 async function _opPollJeepneys() {
   if (!_map) return;
   try {
-    const res  = await fetch('../commuter/api.php?action=live_jeepneys', { cache: 'no-store' });
+    const res = await fetch('../commuter/api.php?action=live_jeepneys', { cache: 'no-store' });
     if (!res.ok) return;
     const body = await res.json();
     if (!body.ok) return;
     const seen = new Set();
+
     body.jeepneys.forEach(d => {
-      if (d.lat == null || d.lng == null || isNaN(d.lat) || isNaN(d.lng)) return; // skip invalid coords
-      seen.add(d.account_id);
-      _opData[d.account_id] = d;
-      if (_opMarkers[d.account_id]) {
-        _opMarkers[d.account_id].setLngLat([d.lng, d.lat]);
-        _opMarkers[d.account_id].getElement().innerHTML =
-          `<img src="Modern.png" style="width:38px;height:38px;transform:${d.direction==='reverse'?'scaleX(-1)':'scaleX(1)'};opacity:${d.stale?'0.45':'1'};transform-origin:center;">`;
-        if (_opPopups[d.account_id].isOpen()) _opPopups[d.account_id].setHTML(_opPopup(d));
+      if (d.lat == null || d.lng == null || isNaN(d.lat) || isNaN(d.lng)) return;
+      const id = d.account_id;
+      seen.add(id);
+      _opData[id] = d;
+
+      // Work out heading
+      let target = null;
+      if (d.heading != null && !isNaN(d.heading)) {
+        target = +d.heading;                       // use GPS heading if the API sends it
+      } else if (_opLastPos[id] && _distM(_opLastPos[id].lat, _opLastPos[id].lng, d.lat, d.lng) > 4) {
+        target = _bearing(_opLastPos[id].lat, _opLastPos[id].lng, d.lat, d.lng);
+      }
+      if (target !== null) {
+        _opHeading[id] = _opHeading[id] === undefined ? target : _unwrap(_opHeading[id], target);
+        _opLastPos[id] = { lat: d.lat, lng: d.lng };
+      } else if (!_opLastPos[id]) {
+        _opLastPos[id] = { lat: d.lat, lng: d.lng };
+      }
+
+      if (_opMarkers[id]) {
+        _opMarkers[id].setLngLat([d.lng, d.lat]);
+        if (_opPopups[id].isOpen()) _opPopups[id].setHTML(_opPopup(d));
       } else {
         const popup = new tt.Popup({ offset: 30 }).setHTML(_opPopup(d));
-        _opPopups[d.account_id] = popup;
-        _opMarkers[d.account_id] = new tt.Marker({ element: _opJeepElement(d.direction, d.stale) })
-          .setLngLat([d.lng, d.lat])
-          .setPopup(popup)
-          .addTo(_map);
+        _opPopups[id] = popup;
+        _opMarkers[id] = new tt.Marker({ element: _opJeepElement() })
+          .setLngLat([d.lng, d.lat]).setPopup(popup).addTo(_map);
+      }
+      _opApplyIcon(id, d.stale);
+    });
+
+    Object.keys(_opMarkers).forEach(id => {
+      if (!seen.has(+id)) {
+        _opMarkers[id].remove();
+        delete _opMarkers[id]; delete _opData[id]; delete _opPopups[id];
+        delete _opHeading[id]; delete _opLastPos[id];
       }
     });
-    Object.keys(_opMarkers).forEach(id => {
-      if (!seen.has(+id)) { _opMarkers[id].remove(); delete _opMarkers[id]; delete _opData[id]; delete _opPopups[id]; }
-    });
-  } catch(e) { console.warn('Op map poll failed:', e); }
+  } catch (e) { console.warn('Op map poll failed:', e); }
 }
 
 // ─────────────────────────────────────────────────────────────

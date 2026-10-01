@@ -639,18 +639,21 @@ const map = tt.map({
 // No tt.NavigationControl added — matches the zoomControl:false setup above.
 
 /* ── Driver marker with heartbeat rings ── */
+const ICON_SRC = 'Modernn.png';
+
 function makeDriverEl() {
   const el = document.createElement('div');
-  el.style.cssText = 'position:relative;width:35px;height:35px;display:flex;align-items:center;justify-content:center;';
+  el.style.cssText = 'position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;';
   el.innerHTML = `
     <div class="hb-wrap">
       <div class="hb-ring"></div>
       <div class="hb-ring"></div>
       <div class="hb-ring"></div>
     </div>
-    <img src="Modern.png" style="width:35px;height:35px;display:block;position:relative;z-index:1;">`;
+    <img src="${ICON_SRC}" style="width:44px;height:44px;display:block;position:relative;z-index:1;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));">`;
   return el;
 }
+
 let driverMarker = new tt.Marker({ element: makeDriverEl(), anchor: 'center' })
   .setLngLat([DEFAULT[1], DEFAULT[0]])
   .addTo(map);
@@ -703,8 +706,8 @@ map.on('load', () => {
    never string-concatenates instead of adding.
 ───────────────────────────────────────────────────────── */
 let _animFrame  = null;
-let _currentPos = [DEFAULT[0], DEFAULT[1]];   // always numbers
-
+let _currentPos = [DEFAULT[0], DEFAULT[1]]; // always numbers
+let _lastHeading = null;   
 function smoothMoveTo(rawLat, rawLng) {
   const lat = parseFloat(rawLat);
   const lng = parseFloat(rawLng);
@@ -719,6 +722,7 @@ function smoothMoveTo(rawLat, rawLng) {
   const movedDist = haversine(_currentPos, [lat, lng]);
   if (movedDist > 0.003) { // ~3 meters
     const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
+    _lastHeading = heading;
     map.easeTo({ bearing: heading, pitch: 60, duration: 900 });
   }
 
@@ -984,6 +988,7 @@ async function uploadCoords(lat, lng) {
       body: new URLSearchParams({
         lat,
         lng,
+        heading:     _lastHeading ?? '',
         eta_minutes: etaMins ?? '',
         eta_dist_km: distKm.toFixed(2),
         direction:   routeForward ? 'forward' : 'reverse',
