@@ -680,15 +680,14 @@ map.on('load', () => {
       id: 'driver-vehicle',
       type: 'symbol',
       source: 'driver-vehicle-source',
-      layout: {
-        'icon-image': 'driver-bus',
-        'icon-size': 0.2,
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
-        'icon-rotation-alignment': 'map',
-        'icon-pitch-alignment': 'map',
-        'icon-rotate': ['get', 'bearing']
-      }
+layout: {
+  'icon-image': 'driver-bus',
+  'icon-size': 0.2,
+  'icon-allow-overlap': true,
+  'icon-ignore-placement': true,
+  'icon-rotation-alignment': 'viewport',   // <-- was 'map'
+  'icon-pitch-alignment': 'map'
+}
     });
   };
   img.src = ICON_SRC;
