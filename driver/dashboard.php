@@ -638,65 +638,60 @@ const map = tt.map({
 });
 // No tt.NavigationControl added — matches the zoomControl:false setup above.
 
-/* ── Driver marker with heartbeat rings ── */
+/* ── Driver vehicle: drawn ON the map, flat on the road (Grab style) ── */
 const ICON_SRC = 'Modernn.png';
 
-function makeDriverEl() {
-  const el = document.createElement('div');
-  el.style.cssText = 'position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;';
-  el.innerHTML = `
-    <div class="hb-wrap">
-      <div class="hb-ring"></div>
-      <div class="hb-ring"></div>
-      <div class="hb-ring"></div>
-    </div>
-    <img src="${ICON_SRC}" style="width:44px;height:44px;display:block;position:relative;z-index:1;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));">`;
-  return el;
+const _vehicleFeature = {
+  type: 'Feature',
+  properties: { bearing: 0 },
+  geometry: { type: 'Point', coordinates: [DEFAULT[1], DEFAULT[0]] }
+};
+
+function _pushVehicle() {
+  const src = map.getSource('driver-vehicle-source');
+  if (src) src.setData(_vehicleFeature);
 }
 
-let driverMarker = new tt.Marker({ element: makeDriverEl(), anchor: 'center' })
-  .setLngLat([DEFAULT[1], DEFAULT[0]])
-  .addTo(map);
-
-  function bearingBetween(lat1, lon1, lat2, lon2) {
-  const toRad = d => d * Math.PI / 180;
-  const toDeg = r => r * 180 / Math.PI;
-  const dLon = toRad(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
-            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-
+// Same interface as the old marker, so the rest of your code keeps working
+const driverMarker = {
+  setLngLat([lng, lat]) {
+    _vehicleFeature.geometry.coordinates = [lng, lat];
+    _pushVehicle();
+    return this;
+  },
+  setRotation(deg) {
+    _vehicleFeature.properties.bearing = deg;
+    _pushVehicle();
+    return this;
+  }
+};
 
 map.on('load', () => {
-  map.showTrafficFlow();
-  map.showTrafficIncidents();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    map.addImage('driver-bus', ctx.getImageData(0, 0, c.width, c.height));
 
-  const routeGeojson = {
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: ROUTE_COORDS.map(([lat, lng]) => [lng, lat]),
-    },
+    map.addSource('driver-vehicle-source', { type: 'geojson', data: _vehicleFeature });
+    map.addLayer({
+      id: 'driver-vehicle',
+      type: 'symbol',
+      source: 'driver-vehicle-source',
+      layout: {
+        'icon-image': 'driver-bus',
+        'icon-size': 0.13,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-rotation-alignment': 'map',
+        'icon-pitch-alignment': 'map',
+        'icon-rotate': ['get', 'bearing']
+      }
+    });
   };
-
-  map.addSource('driver-route-source', { type: 'geojson', data: routeGeojson });
-
-  map.addLayer({
-    id: 'driver-route-casing',
-    type: 'line',
-    source: 'driver-route-source',
-    layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: { 'line-color': '#000814', 'line-width': 8, 'line-opacity': 0.4 },
-  });
-  map.addLayer({
-    id: 'driver-route-line',
-    type: 'line',
-    source: 'driver-route-source',
-    layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: { 'line-color': '#0ea5e9', 'line-width': 4, 'line-opacity': 0.55 },
-  });
+  img.src = ICON_SRC;
 });
 
 
@@ -721,10 +716,11 @@ function smoothMoveTo(rawLat, rawLng) {
   // so GPS jitter at a standstill doesn't spin the map randomly.
   const movedDist = haversine(_currentPos, [lat, lng]);
   if (movedDist > 0.003) { // ~3 meters
-    const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
-    _lastHeading = heading;
-    map.easeTo({ bearing: heading, pitch: 60, duration: 900 });
-  }
+  const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
+  _lastHeading = heading;
+  driverMarker.setRotation(heading);   // <-- add this
+  map.easeTo({ bearing: heading, pitch: 60, duration: 900 });
+}
 
   const start     = [_currentPos[0], _currentPos[1]];
   const end       = [lat, lng];
