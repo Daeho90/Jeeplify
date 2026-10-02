@@ -633,7 +633,7 @@ const map = tt.map({
   container: 'map',
   center: [DEFAULT[1], DEFAULT[0]], // TomTom uses [lng, lat]
   zoom: 17,
-  pitch: 60,
+  pitch: 40,
   bearing: 0,
 });
 // No tt.NavigationControl added — matches the zoomControl:false setup above.
@@ -682,7 +682,7 @@ map.on('load', () => {
       source: 'driver-vehicle-source',
       layout: {
         'icon-image': 'driver-bus',
-        'icon-size': 0.13,
+        'icon-size': 0.2,
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-rotation-alignment': 'map',
@@ -719,7 +719,7 @@ function smoothMoveTo(rawLat, rawLng) {
   const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
   _lastHeading = heading;
   driverMarker.setRotation(heading);   // <-- add this
-  map.easeTo({ bearing: heading, pitch: 60, duration: 900 });
+  map.easeTo({ bearing: heading, pitch: 40, duration: 900 });
 }
 
   const start     = [_currentPos[0], _currentPos[1]];
