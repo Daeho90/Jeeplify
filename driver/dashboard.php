@@ -682,7 +682,12 @@ map.on('load', () => {
       source: 'driver-vehicle-source',
 layout: {
   'icon-image': 'driver-bus',
-  'icon-size': 0.2,
+  'icon-size': ['interpolate', ['linear'], ['zoom'],
+  10, 0.04,
+  14, 0.08,
+  17, 0.16,
+  19, 0.28
+],
   'icon-allow-overlap': true,
   'icon-ignore-placement': true,
   'icon-rotation-alignment': 'viewport',   // <-- was 'map'
