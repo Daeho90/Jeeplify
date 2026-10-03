@@ -699,6 +699,49 @@ layout: {
    BUG FIX: always coerce lat/lng to float so rAF math
    never string-concatenates instead of adding.
 ───────────────────────────────────────────────────────── */
+
+function bearingBetween(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+map.on('load', () => {
+  map.showTrafficFlow();
+  map.showTrafficIncidents();
+
+  map.addSource('driver-route-source', {
+    type: 'geojson',
+    data: {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: ROUTE_COORDS.map(([lat, lng]) => [lng, lat]),
+      },
+    },
+  });
+
+  map.addLayer({
+    id: 'driver-route-casing',
+    type: 'line',
+    source: 'driver-route-source',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#000814', 'line-width': 8, 'line-opacity': 0.4 },
+  });
+  map.addLayer({
+    id: 'driver-route-line',
+    type: 'line',
+    source: 'driver-route-source',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': '#22c55e', 'line-width': 6, 'line-opacity': 0.85 },
+  });
+});
+
+
 let _animFrame  = null;
 let _currentPos = [DEFAULT[0], DEFAULT[1]]; // always numbers
 let _lastHeading = null;   
