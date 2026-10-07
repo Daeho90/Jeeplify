@@ -761,12 +761,14 @@ function smoothMoveTo(rawLat, rawLng) {
   // Rotate the whole camera to face the direction of travel (Waze/Google
   // Maps nav-mode style). Only rotate if we've moved a meaningful distance,
   // so GPS jitter at a standstill doesn't spin the map randomly.
-  const movedDist = haversine(_currentPos, [lat, lng]);
-  if (movedDist > 0.003) { // ~3 meters
+const movedDist = haversine(_currentPos, [lat, lng]);
+if (movedDist > 0.003) { // ~3 meters
   const heading = bearingBetween(_currentPos[0], _currentPos[1], lat, lng);
   _lastHeading = heading;
-  driverMarker.setRotation(heading);   // <-- add this
-  map.easeTo({ bearing: heading, pitch: 40, duration: 900 });
+  driverMarker.setRotation(heading);
+  map.easeTo({ center: [lng, lat], bearing: heading, pitch: 40, duration: 900 });
+} else {
+  map.easeTo({ center: [lng, lat], duration: 900 });
 }
 
   const start     = [_currentPos[0], _currentPos[1]];
@@ -1058,7 +1060,6 @@ function startGps() {
       if (!isFinite(lat) || !isFinite(lng)) return;
       pending = [lat, lng];
       smoothMoveTo(lat, lng);
-      map.easeTo({ center: [lng, lat], duration: 900 });
       setGpsUI('on');
       if (gpsOn && currentTripId) calcETA(lat, lng);
     },
