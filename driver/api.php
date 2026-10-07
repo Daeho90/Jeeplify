@@ -190,25 +190,30 @@ function handle_update_location(PDO $pdo): void {
 
     $ALLOWED_STATUSES = ['on_route', 'traffic', 'maintenance', 'complete', 'idle'];
     $status = in_array($rawStatus, $ALLOWED_STATUSES) ? $rawStatus : 'on_route';
+    $headingRaw = $_POST['heading'] ?? '';
+    $heading = ($headingRaw !== '' && is_numeric($headingRaw))
+    ? fmod((float) $headingRaw + 360.0, 360.0)
+    : null;
 
     try {
         // UPSERT — insert or update in one query (MySQL 8+ ON DUPLICATE KEY)
         // Assumes driver_locations has a UNIQUE KEY on account_id
         $stmt = $pdo->prepare("
-            INSERT INTO driver_locations
-                (account_id, lat, lng, eta_minutes, eta_dist_km, direction, status, updated_at)
-            VALUES
-                (?, ?, ?, ?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE
-                lat         = VALUES(lat),
-                lng         = VALUES(lng),
-                eta_minutes = VALUES(eta_minutes),
-                eta_dist_km = VALUES(eta_dist_km),
-                direction   = VALUES(direction),
-                status      = VALUES(status),
-                updated_at  = NOW()
-        ");
-        $stmt->execute([$accountId, $lat, $lng, $etaMinutes, $etaDistKm, $direction, $status]);
+    INSERT INTO driver_locations
+        (account_id, lat, lng, heading, eta_minutes, eta_dist_km, direction, status, updated_at)
+    VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+    ON DUPLICATE KEY UPDATE
+        lat         = VALUES(lat),
+        lng         = VALUES(lng),
+        heading     = COALESCE(VALUES(heading), heading),
+        eta_minutes = VALUES(eta_minutes),
+        eta_dist_km = VALUES(eta_dist_km),
+        direction   = VALUES(direction),
+        status      = VALUES(status),
+        updated_at  = NOW()
+");
+$stmt->execute([$accountId, $lat, $lng, $heading, $etaMinutes, $etaDistKm, $direction, $status]);
 
         // Mark the assigned jeepney as 'active' so it passes the commuter map's
         // `j.status != 'offline'` filter.

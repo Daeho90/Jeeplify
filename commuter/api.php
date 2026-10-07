@@ -141,6 +141,7 @@ function handle_live_jeepneys(PDO $pdo): void {
                 dl.account_id,
                 dl.lat,
                 dl.lng,
+                dl.heading,
                 dl.direction,
                 dl.status           AS driver_status,
                 dl.eta_minutes,
@@ -177,6 +178,7 @@ function handle_live_jeepneys(PDO $pdo): void {
         foreach ($rows as &$row) {
             $row['lat']         = (float) $row['lat'];
             $row['lng']         = (float) $row['lng'];
+            $row['heading']     = $row['heading'] !== null ? (float) $row['heading'] : null;
             $row['eta_minutes'] = $row['eta_minutes'] !== null ? (int)   $row['eta_minutes'] : null;
             $row['eta_dist_km'] = $row['eta_dist_km'] !== null ? (float) $row['eta_dist_km'] : null;
             $row['stale']       = (bool)  $row['stale'];

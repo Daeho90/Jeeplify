@@ -621,7 +621,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Montserrat',sans-s
    CONSTANTS
 ───────────────────────────────────────────────────────── */
 const DEFAULT  = [10.6765, 122.9509];   // number literals — never strings
-const GPS_TICK = 10_000;
+const GPS_TICK = 3_000;
 const BOOKINGS_POLL_TICK = 15_000;
 
 /* ─────────────────────────────────────────────────────────
@@ -639,7 +639,7 @@ const map = tt.map({
 // No tt.NavigationControl added — matches the zoomControl:false setup above.
 
 /* ── Driver vehicle: drawn ON the map, flat on the road (Grab style) ── */
-const ICON_SRC = 'Modernn.png';
+const ICON_SRC = 'bus_nw.png';
 
 const _vehicleFeature = {
   type: 'Feature',
@@ -682,16 +682,16 @@ map.on('load', () => {
       source: 'driver-vehicle-source',
 layout: {
   'icon-image': 'driver-bus',
- 'icon-size': ['interpolate', ['linear'], ['zoom'],
-  10, 0.02,
-  14, 0.05,
-  17, 0.1,
-  19, 0.18
+'icon-size': ['interpolate', ['linear'], ['zoom'],
+  10, 0.04,
+  14, 0.10,
+  17, 0.20,
+  19, 0.36
 ],
   'icon-allow-overlap': true,
   'icon-ignore-placement': true,
   'icon-rotation-alignment': 'viewport',   // <-- was 'map'
-  'icon-pitch-alignment': 'map'
+  'icon-pitch-alignment': 'viewport'
 }
     });
   };
@@ -1018,7 +1018,11 @@ function setGpsUI(state) {
   if (dlbl) dlbl.textContent = state === 'on' ? 'GPS Live' : state === 'err' ? 'GPS Error' : 'Enable GPS';
 }
 
+let _uploading = false;
+
 async function uploadCoords(lat, lng) {
+  if (_uploading) return;
+  _uploading = true;
   try {
     const coords  = routeForward ? ROUTE_COORDS : [...ROUTE_COORDS].reverse();
     const idx     = nearestRouteIndex(coords, lat, lng);
@@ -1038,8 +1042,10 @@ async function uploadCoords(lat, lng) {
         status:      currentTripStatus || 'on_route'
       })
     });
-  } catch { /* silent */ }
+    } catch { /* silent */ }
+  finally { _uploading = false; }
 }
+
 
 function startGps() {
   if (!navigator.geolocation) { setGpsUI('err'); showToast('Geolocation not supported.'); return; }
@@ -1061,7 +1067,7 @@ function startGps() {
   setGpsUI('err');
   showToast(`GPS error ${err.code}: ${err.message}`, 'error');
 },
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
   );
   gpsTimer = setInterval(() => {
     if (pending) uploadCoords(pending[0], pending[1]);

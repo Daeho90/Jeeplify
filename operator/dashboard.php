@@ -1090,6 +1090,7 @@ function initMap() {
     center: [122.9509, 10.6765],
     zoom: 13
   });
+  _map.on('load', _opInitLayers);
 }
 // ─────────────────────────────────────────────────────────────
 // TAB LOGIC
@@ -1524,9 +1525,20 @@ function createDriver() {
 // ─────────────────────────────────────────────────────────────
 // LIVE MAP POLLING
 // ─────────────────────────────────────────────────────────────
-const _opMarkers = {}, _opData = {}, _opPopups = {}, _opHeading = {}, _opLastPos = {};
 
-// Bearing in degrees (0 = north, 90 = east) between two coordinates
+
+const POLL_MS  = 3000;   // ask the server every 3 s
+const TWEEN_MS = 3200;   // glide a bit longer than the gap so motion never stops
+
+const jeepData  = {};    // account_id -> latest server row
+const jeepFleet = {};    // account_id -> animation state
+let _fleetRaf = null, _lastDraw = 0, _jeepReady = false, _polling = false;
+let _openPopup = null, _openPopupId = null;
+
+const JEEP_GLOW = ['match', ['get', 'state'],
+  'traffic', '#f59e0b', 'maintenance', '#f97316', 'complete', '#6b7280',
+  'idle', '#93c5fd', 'stale', '#6b7280', '#10b981'];
+
 function _bearing(lat1, lng1, lat2, lng2) {
   const rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI;
   const dLng = rad(lng2 - lng1);
@@ -1535,82 +1547,188 @@ function _bearing(lat1, lng1, lat2, lng2) {
             Math.sin(rad(lat1)) * Math.cos(rad(lat2)) * Math.cos(dLng);
   return (deg(Math.atan2(y, x)) + 360) % 360;
 }
-
-// Rough distance in meters (good enough for "did it actually move?")
 function _distM(lat1, lng1, lat2, lng2) {
   const dy = (lat2 - lat1) * 111320;
   const dx = (lng2 - lng1) * 111320 * Math.cos(lat1 * Math.PI / 180);
   return Math.sqrt(dx * dx + dy * dy);
 }
-
-// Pick the shortest turn so the icon never spins the long way around
-function _unwrap(prev, next) {
+function _unwrap(prev, next) {            // shortest way around the circle
   return prev + ((((next - prev) % 360) + 540) % 360 - 180);
 }
 
-function _opJeepElement() {
-  const el = document.createElement('div');
-  el.style.width = el.style.height = '38px';
-  el.innerHTML = `<img src="Modern.png" style="width:38px;height:38px;transition:transform .6s ease, opacity .3s;transform-origin:center;">`;
-  return el;
+// which of the 4 bus pictures to show, based on the heading as seen on screen
+function _jeepSprite(heading) {
+  const h = (((heading - _map.getBearing()) % 360) + 360) % 360;
+  return 'bus-' + (h < 90 ? 'ne' : h < 180 ? 'se' : h < 270 ? 'sw' : 'nw');
 }
 
-function _opApplyIcon(id, stale) {
-  const img = _opMarkers[id].getElement().querySelector('img');
-  img.style.transform = `rotate(${_opHeading[id] || 0}deg)`;
-  img.style.opacity = stale ? '0.45' : '1';
+// ── glide each bus from where it is now to its newest position ──
+function _fleetCurrent(f, now) {
+  const k = Math.min((now - f.t0) / TWEEN_MS, 1);
+  const e = k < .5 ? 2 * k * k : -1 + (4 - 2 * k) * k;
+  return {
+    lng: f.from.lng + (f.to.lng - f.from.lng) * e,
+    lat: f.from.lat + (f.to.lat - f.from.lat) * e,
+    heading: f.from.heading + (f.to.heading - f.from.heading) * e,
+    done: k >= 1
+  };
+}
+function _fleetRender(now) {
+  const src = _map.getSource('jeep-source');
+  if (!src) { _fleetRaf = null; return; }
+  if (now - _lastDraw < 33) { _fleetRaf = requestAnimationFrame(_fleetRender); return; }  // ~30 fps
+  _lastDraw = now;
+  let animating = false;
+  const features = [];
+  for (const id in jeepFleet) {
+    const f = jeepFleet[id], c = _fleetCurrent(f, now);
+    if (!c.done) animating = true;
+    features.push({
+      type: 'Feature',
+      properties: { id: +id, state: f.state, img: _jeepSprite(c.heading) },
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
+    });
+    if (_openPopup && String(_openPopupId) === id) _openPopup.setLngLat([c.lng, c.lat]);
+  }
+  src.setData({ type: 'FeatureCollection', features });
+  _fleetRaf = animating ? requestAnimationFrame(_fleetRender) : null;
+}
+function _fleetKick() { if (!_fleetRaf) _fleetRaf = requestAnimationFrame(_fleetRender); }
+
+function _fleetUpdate(d, lat, lng, now) {
+  const id = d.account_id, prev = jeepFleet[id];
+  const state = d.stale ? 'stale' : (d.display_status || 'on_route');
+  let target = null;
+  if (d.heading != null && d.heading !== '' && !isNaN(d.heading)) target = +d.heading;
+  else if (prev && _distM(prev.to.lat, prev.to.lng, lat, lng) > 4) target = _bearing(prev.to.lat, prev.to.lng, lat, lng);
+
+  if (!prev) {
+    const h = target ?? 0;
+    jeepFleet[id] = { from: { lng, lat, heading: h }, to: { lng, lat, heading: h }, t0: now, state };
+    return;
+  }
+  const cur = _fleetCurrent(prev, now);
+  prev.from  = { lng: cur.lng, lat: cur.lat, heading: cur.heading };
+  prev.to    = { lng, lat, heading: target === null ? cur.heading : _unwrap(cur.heading, target) };
+  prev.t0    = now;
+  prev.state = state;
 }
 
+// ── map layers (created once the map has loaded) ──
+function _opInitLayers() {
+  const dirs = ['ne', 'se', 'sw', 'nw'];
+  Promise.all(dirs.map(k => new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      _map.addImage('bus-' + k, ctx.getImageData(0, 0, c.width, c.height));
+      res();
+    };
+    img.onerror = () => { console.warn('Missing bus sprite: bus_' + k + '.png'); res(); };
+    img.src = 'bus_' + k + '.png';
+  }))).then(() => {
+    _map.addSource('jeep-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+    _map.addLayer({
+      id: 'jeep-glow', type: 'circle', source: 'jeep-source',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 13, 6, 15, 11, 17, 20, 19, 40],
+        'circle-color': JEEP_GLOW,
+        'circle-opacity': 0.35,
+        'circle-blur': 0.5,
+        'circle-translate': [0, 6],
+        'circle-pitch-alignment': 'map'
+      }
+    });
+    _map.addLayer({
+      id: 'jeep-icons', type: 'symbol', source: 'jeep-source',
+      layout: {
+        'icon-image': ['get', 'img'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.05, 13, 0.09, 15, 0.15, 17, 0.22, 19, 0.4],
+        'icon-rotation-alignment': 'viewport',
+        'icon-pitch-alignment': 'viewport',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true
+      },
+      paint: { 'icon-opacity': ['case', ['==', ['get', 'state'], 'stale'], 0.45, 1] }
+    });
+
+    _map.on('click', 'jeep-icons', e => openJeepPopup(e.features[0].properties.id));
+    _map.on('mouseenter', 'jeep-icons', () => { _map.getCanvas().style.cursor = 'pointer'; });
+    _map.on('mouseleave', 'jeep-icons', () => { _map.getCanvas().style.cursor = ''; });
+    _map.on('rotate', _fleetKick);   // re-pick the sprite if the map is rotated
+
+    _jeepReady = true;
+    _fleetKick();
+  });
+}
+
+// ── popup ──
+function _opPopup(d) {
+  const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:14px;margin-top:5px;">
+    <span style="font-size:10px;color:#9ca3af;">${label}</span>
+    <span style="font-size:11px;font-weight:700;color:#e8edf5;text-align:right;">${escHtml(val || '—')}</span></div>`;
+  const eta = d.eta_minutes != null
+    ? row('ETA', `~${d.eta_minutes} min${d.eta_dist_km != null ? ' · ' + d.eta_dist_km + ' km' : ''}`) : '';
+  const status = String(d.display_status || 'idle').replace('_', ' ');
+  return `<div style="font-family:'Plus Jakarta Sans',sans-serif;padding:12px 14px;min-width:190px;">
+    <div style="font-size:15px;font-weight:800;color:#f9fafb;">${escHtml(d.unit_code || '—')}
+      ${d.stale ? '<span style="font-size:9px;background:#374151;color:#9ca3af;padding:1px 7px;border-radius:999px;margin-left:5px;">offline</span>' : ''}</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#22d3ee;margin:4px 0 6px;">${escHtml(status)}</div>
+    ${row('Driver', d.driver_name)}
+    ${row('Route', d.route_name)}
+    ${row('Plate', d.plate_no)}
+    ${eta}
+  </div>`;
+}
+function openJeepPopup(id) {
+  const d = jeepData[id], f = jeepFleet[id];
+  if (!d || !f) return;
+  if (_openPopup) _openPopup.remove();
+  const c = _fleetCurrent(f, performance.now());
+  const p = new tt.Popup({ offset: 18, maxWidth: '260px' })
+    .setLngLat([c.lng, c.lat]).setHTML(_opPopup(d)).addTo(_map);
+  _openPopup = p; _openPopupId = id;
+  p.on('close', () => { if (_openPopup === p) { _openPopup = null; _openPopupId = null; } });
+}
+
+// ── fast polling ──
 async function _opPollJeepneys() {
-  if (!_map) return;
+  if (!_map || _polling || document.hidden) return;
+  _polling = true;
   try {
     const res = await fetch('../commuter/api.php?action=live_jeepneys', { cache: 'no-store' });
     if (!res.ok) return;
     const body = await res.json();
     if (!body.ok) return;
+
+    const now = performance.now();
     const seen = new Set();
-
     body.jeepneys.forEach(d => {
-      if (d.lat == null || d.lng == null || isNaN(d.lat) || isNaN(d.lng)) return;
-      const id = d.account_id;
-      seen.add(id);
-      _opData[id] = d;
-
-      // Work out heading
-      let target = null;
-      if (d.heading != null && !isNaN(d.heading)) {
-        target = +d.heading;                       // use GPS heading if the API sends it
-      } else if (_opLastPos[id] && _distM(_opLastPos[id].lat, _opLastPos[id].lng, d.lat, d.lng) > 4) {
-        target = _bearing(_opLastPos[id].lat, _opLastPos[id].lng, d.lat, d.lng);
-      }
-      if (target !== null) {
-        _opHeading[id] = _opHeading[id] === undefined ? target : _unwrap(_opHeading[id], target);
-        _opLastPos[id] = { lat: d.lat, lng: d.lng };
-      } else if (!_opLastPos[id]) {
-        _opLastPos[id] = { lat: d.lat, lng: d.lng };
-      }
-
-      if (_opMarkers[id]) {
-        _opMarkers[id].setLngLat([d.lng, d.lat]);
-        if (_opPopups[id].isOpen()) _opPopups[id].setHTML(_opPopup(d));
-      } else {
-        const popup = new tt.Popup({ offset: 30 }).setHTML(_opPopup(d));
-        _opPopups[id] = popup;
-        _opMarkers[id] = new tt.Marker({ element: _opJeepElement() })
-          .setLngLat([d.lng, d.lat]).setPopup(popup).addTo(_map);
-      }
-      _opApplyIcon(id, d.stale);
+      const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
+      if (!isFinite(lat) || !isFinite(lng)) return;
+      seen.add(String(d.account_id));
+      jeepData[d.account_id] = d;
+      _fleetUpdate(d, lat, lng, now);
     });
-
-    Object.keys(_opMarkers).forEach(id => {
-      if (!seen.has(+id)) {
-        _opMarkers[id].remove();
-        delete _opMarkers[id]; delete _opData[id]; delete _opPopups[id];
-        delete _opHeading[id]; delete _opLastPos[id];
+    Object.keys(jeepFleet).forEach(id => {
+      if (!seen.has(id)) {
+        delete jeepFleet[id]; delete jeepData[id];
+        if (_openPopup && String(_openPopupId) === id) _openPopup.remove();
       }
     });
-  } catch (e) { console.warn('Op map poll failed:', e); }
+    if (_openPopup && jeepData[_openPopupId]) _openPopup.setHTML(_opPopup(jeepData[_openPopupId]));
+    if (_jeepReady) _fleetKick();
+  } catch (e) {
+    console.warn('Op map poll failed:', e);
+  } finally {
+    _polling = false;
+  }
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // CUSTOM SELECT
@@ -1827,7 +1945,7 @@ document.addEventListener('DOMContentLoaded', () => {
 window.onload = () => {
   initMap();
   _opPollJeepneys();
-  setInterval(_opPollJeepneys, 10000);
+  setInterval(_opPollJeepneys, 3000);
 };
 </script>
 </body>
