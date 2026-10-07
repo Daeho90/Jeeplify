@@ -766,10 +766,7 @@ if ($accountId) {
         <div class="ric-title" id="ricTitle">Routing to nearest jeepney…</div>
         <button class="ric-close" onclick="clearRouteToJeepney()">✕</button>
       </div>
-      <div class="ric-modes">
-        <button class="ric-mode active" data-mode="pedestrian" onclick="setRouteMode('pedestrian')">🚶 Walk</button>
-        <button class="ric-mode" data-mode="car" onclick="setRouteMode('car')">🚗 Drive</button>
-      </div>
+
       <div class="ric-stats">
         <div class="ric-stat"><span id="ricDistance">—</span><small>distance</small></div>
         <div class="ric-stat"><span id="ricDuration">—</span><small>ETA</small></div>
@@ -855,6 +852,7 @@ function applyTheme(theme) {
   mapEl.classList.remove('jl-filter-invert', 'jl-filter-dim');
   if (theme.filterClass) mapEl.classList.add(theme.filterClass);
   document.getElementById('themeBtnIcon').textContent = theme.icon;
+  _jeepApplyTheme();
 }
 const initTheme = getThemeByHour(new Date().getHours());
 let currentThemeIdx = THEME_ORDER.indexOf(initTheme.label);
@@ -1158,41 +1156,7 @@ async function cancelBooking(id, btn) {
 /* ══════════════════════════════════════════════
    LIVE JEEPNEY TRACKING (unchanged logic)
 ══════════════════════════════════════════════ */
-const jeepMarkers = {}, jeepData = {};
-const JEEP_IMG = new Image(); JEEP_IMG.src = '/commuter/Modern.png';
 
-// TomTom's tt.Marker takes a plain DOM element (like Mapbox/MapLibre markers)
-// instead of Leaflet's L.divIcon — build the element directly.
-function makeJeepEl(direction, stale, status) {
-  const STATUS_COLORS = {
-    on_route:    { glow:'rgba(16,185,129,.8)',  pulse:'#6ee7b7' },
-    traffic:     { glow:'rgba(245,158,11,.8)',  pulse:'#fde68a' },
-    maintenance: { glow:'rgba(239,68,68,.8)',   pulse:'#fca5a5' },
-    complete:    { glow:'rgba(107,114,128,.6)', pulse:'#d1d5db' },
-    idle:        { glow:'rgba(147,197,253,.7)', pulse:'#bfdbfe' },
-  };
-  const sc       = STATUS_COLORS[status] || STATUS_COLORS.on_route;
-  const dotColor = stale ? '#6b7280' : sc.pulse;
-  const animName = `pulse_${status || 'on_route'}`;
-  if (!document.getElementById('anim_' + animName)) {
-    const style = document.createElement('style');
-    style.id    = 'anim_' + animName;
-    style.textContent = `@keyframes ${animName} { 0%{transform:scale(1);opacity:.65} 70%{transform:scale(2.4);opacity:0} 100%{transform:scale(2.4);opacity:0} }`;
-    document.head.appendChild(style);
-  }
-  const flip    = direction === 'reverse' ? 'scaleX(-1)' : 'scaleX(1)';
-  const opacity = stale ? '0.45' : '1';
-  const glow    = stale ? '' : `filter:drop-shadow(0 0 6px ${sc.glow});`;
-  const imgUrl  = window.location.origin + '/commuter/Modern.png';
-  const el = document.createElement('div');
-  el.style.cssText = 'position:relative;width:28px;height:28px;cursor:pointer;';
-  el.innerHTML = `
-    <div style="position:relative;width:40px;height:40px;left:-6px;top:-6px;">
-      ${!stale ? `<span style="position:absolute;top:50%;left:50%;width:28px;height:28px;margin-top:-14px;margin-left:-14px;border-radius:50%;background:${dotColor};opacity:.6;animation:${animName} 2s ease-out infinite;pointer-events:none;display:block;"></span>` : ''}
-      <img src="${imgUrl}" width="40" height="40" style="position:absolute;top:0;left:0;width:40px;height:40px;object-fit:contain;transform:${flip};transform-origin:center;opacity:${opacity};${glow}display:block;">
-    </div>`;
-  return el;
-}
 
 const TRIP_STATUS_STYLES = {
   on_route:    { label:'On Route',    color:'#10b981' },
@@ -1225,7 +1189,7 @@ function buildPopup(d) {
   return `
     <div style="font-family:'Montserrat',sans-serif;padding:12px 14px;min-width:200px;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-  <img src="/commuter/Modern.png" alt="" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;">
+  <img src="/commuter/bus_se.png" alt="" style="width:12px;height:12px;object-fit:contain;flex-shrink:0;">
   <span style="font-size:15px;font-weight:800;color:#f9fafb;letter-spacing:-.3px;">${d.unit_code || '—'}</span>
   ${staleBadge}
 </div>
@@ -1240,52 +1204,219 @@ function buildPopup(d) {
     </div>`;
 }
 
+
+
+
+/* ══════════════════════════════════════════════
+   LIVE FLEET — one map layer, fast polling, smooth gliding, 3D bus sprites
+══════════════════════════════════════════════ */
+const POLL_MS  = 3000;   // ask the server every 3 s
+const TWEEN_MS = 3200;   // glide a bit longer than the gap so motion never stops
+
+const jeepData  = {};    // account_id -> latest server row
+const jeepFleet = {};    // account_id -> animation state
+let _fleetRaf = null, _lastDraw = 0, _jeepReady = false, _polling = false;
+let _openPopup = null, _openPopupId = null;
+let _jeepNight = false;
+
+const JEEP_GLOW = ['match', ['get', 'state'],
+  'traffic', '#f59e0b', 'maintenance', '#f97316', 'complete', '#6b7280',
+  'idle', '#93c5fd', 'stale', '#6b7280', '#10b981'];
+
+function _bearing(lat1, lng1, lat2, lng2) {
+  const rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI;
+  const dLng = rad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(rad(lat2));
+  const x = Math.cos(rad(lat1)) * Math.sin(rad(lat2)) -
+            Math.sin(rad(lat1)) * Math.cos(rad(lat2)) * Math.cos(dLng);
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+function _distM(lat1, lng1, lat2, lng2) {
+  const dy = (lat2 - lat1) * 111320;
+  const dx = (lng2 - lng1) * 111320 * Math.cos(lat1 * Math.PI / 180);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function _unwrap(prev, next) {            // shortest way around the circle
+  return prev + ((((next - prev) % 360) + 540) % 360 - 180);
+}
+
+// Night theme inverts the map canvas with a CSS filter, which would also invert
+// the buses. Pre-apply the same colour maths so they come out normal after it.
+function nightify(imgData) {
+  const d = imgData.data, cl = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const r = 1 - d[i] / 255, g = 1 - d[i + 1] / 255, b = 1 - d[i + 2] / 255;
+    d[i]     = cl(-0.574 * r + 1.430 * g + 0.144 * b) * 255;
+    d[i + 1] = cl( 0.426 * r + 0.430 * g + 0.144 * b) * 255;
+    d[i + 2] = cl( 0.426 * r + 1.430 * g - 0.856 * b) * 255;
+  }
+  return imgData;
+}
+
+// which of the 4 bus pictures to show, based on the heading as seen on screen
+function _jeepSprite(heading) {
+  const h = (((heading - map.getBearing()) % 360) + 360) % 360;
+  const dir = h < 90 ? 'ne' : h < 180 ? 'se' : h < 270 ? 'sw' : 'nw';
+  return 'bus-' + dir + (_jeepNight ? '-night' : '');
+}
+
+// ── glide each bus from where it is now to its newest position ──
+function _fleetCurrent(f, now) {
+  const k = Math.min((now - f.t0) / TWEEN_MS, 1);
+  const e = k < .5 ? 2 * k * k : -1 + (4 - 2 * k) * k;
+  return {
+    lng: f.from.lng + (f.to.lng - f.from.lng) * e,
+    lat: f.from.lat + (f.to.lat - f.from.lat) * e,
+    heading: f.from.heading + (f.to.heading - f.from.heading) * e,
+    done: k >= 1
+  };
+}
+function _fleetRender(now) {
+  const src = map.getSource('jeep-source');
+  if (!src) { _fleetRaf = null; return; }
+  if (now - _lastDraw < 33) { _fleetRaf = requestAnimationFrame(_fleetRender); return; }  // ~30 fps
+  _lastDraw = now;
+  let animating = false;
+  const features = [];
+  for (const id in jeepFleet) {
+    const f = jeepFleet[id], c = _fleetCurrent(f, now);
+    if (!c.done) animating = true;
+    features.push({
+      type: 'Feature',
+      properties: { id: +id, state: f.state, img: _jeepSprite(c.heading) },
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
+    });
+    if (_openPopup && String(_openPopupId) === id) _openPopup.setLngLat([c.lng, c.lat]);
+  }
+  src.setData({ type: 'FeatureCollection', features });
+  _fleetRaf = animating ? requestAnimationFrame(_fleetRender) : null;
+}
+function _fleetKick() { if (!_fleetRaf) _fleetRaf = requestAnimationFrame(_fleetRender); }
+
+function _fleetUpdate(d, lat, lng, now) {
+  const id = d.account_id, prev = jeepFleet[id];
+  const state = d.stale ? 'stale' : (d.display_status || 'on_route');
+  let target = null;
+  if (d.heading != null && d.heading !== '' && !isNaN(d.heading)) target = +d.heading;
+  else if (prev && _distM(prev.to.lat, prev.to.lng, lat, lng) > 4) target = _bearing(prev.to.lat, prev.to.lng, lat, lng);
+
+  if (!prev) {
+    const h = target ?? 0;
+    jeepFleet[id] = { from: { lng, lat, heading: h }, to: { lng, lat, heading: h }, t0: now, state };
+    return;
+  }
+  const cur = _fleetCurrent(prev, now);
+  prev.from  = { lng: cur.lng, lat: cur.lat, heading: cur.heading };
+  prev.to    = { lng, lat, heading: target === null ? cur.heading : _unwrap(cur.heading, target) };
+  prev.t0    = now;
+  prev.state = state;
+}
+
+// ── layers (created once the map has loaded) ──
+function _jeepInitLayers() {
+  const dirs = ['ne', 'se', 'sw', 'nw'];
+  Promise.all(dirs.map(k => new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      map.addImage('bus-' + k, ctx.getImageData(0, 0, c.width, c.height));
+      map.addImage('bus-' + k + '-night', nightify(ctx.getImageData(0, 0, c.width, c.height)));
+      res();
+    };
+    img.onerror = () => { console.warn('Missing bus sprite: bus_' + k + '.png'); res(); };
+    img.src = 'bus_' + k + '.png';
+  }))).then(() => {
+    map.addSource('jeep-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+    map.addLayer({
+      id: 'jeep-glow', type: 'circle', source: 'jeep-source',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 13, 6, 15, 11, 17, 20, 19, 40],
+        'circle-color': JEEP_GLOW,
+        'circle-opacity': 0.35,
+        'circle-blur': 0.5,
+        'circle-translate': [0, 6],
+        'circle-pitch-alignment': 'map'
+      }
+    });
+    map.addLayer({
+      id: 'jeep-icons', type: 'symbol', source: 'jeep-source',
+      layout: {
+        'icon-image': ['get', 'img'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.05, 13, 0.09, 15, 0.15, 17, 0.22, 19, 0.4],
+        'icon-rotation-alignment': 'viewport',
+        'icon-pitch-alignment': 'viewport',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true
+      },
+      paint: { 'icon-opacity': ['case', ['==', ['get', 'state'], 'stale'], 0.45, 1] }
+    });
+
+    map.on('click', 'jeep-icons', e => openJeepPopup(e.features[0].properties.id));
+    map.on('mouseenter', 'jeep-icons', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'jeep-icons', () => { map.getCanvas().style.cursor = ''; });
+    map.on('rotate', _fleetKick);   // re-pick the sprite if the user rotates the map
+
+    _jeepReady = true;
+    _jeepApplyTheme();
+    _fleetKick();
+  });
+}
+map.on('load', _jeepInitLayers);
+
+function _jeepApplyTheme() {
+  _jeepNight = document.getElementById('map').classList.contains('jl-filter-invert');
+  if (_jeepReady) _fleetKick();
+}
+function _jeepSetFilter(ids) {            // ids = array to show only those, null = show all
+  if (!_jeepReady) return;
+  const f = ids === null ? null : ['in', ['get', 'id'], ['literal', ids]];
+  ['jeep-glow', 'jeep-icons'].forEach(l => map.setFilter(l, f));
+}
+
+function openJeepPopup(id) {
+  const d = jeepData[id], f = jeepFleet[id];
+  if (!d || !f) return;
+  if (_openPopup) _openPopup.remove();
+  const c = _fleetCurrent(f, performance.now());
+  const p = new tt.Popup({ offset: 18, maxWidth: '260px' })
+    .setLngLat([c.lng, c.lat]).setHTML(buildPopup(d)).addTo(map);
+  _openPopup = p; _openPopupId = id;
+  p.on('close', () => { if (_openPopup === p) { _openPopup = null; _openPopupId = null; } });
+}
+
+// ── fast polling ──
 async function pollJeepneys() {
+  if (_polling || document.hidden) return;
+  _polling = true;
   try {
-    const res  = await fetch('api.php?action=live_jeepneys', { cache:'no-store' });
+    const res = await fetch('api.php?action=live_jeepneys', { cache: 'no-store' });
     if (!res.ok) return;
     const body = await res.json();
     if (!body.ok) return;
+
+    const now = performance.now();
     const seen = new Set();
     body.jeepneys.forEach(d => {
       const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
       if (!isFinite(lat) || !isFinite(lng)) return;
-      seen.add(d.account_id);
+      seen.add(String(d.account_id));
       jeepData[d.account_id] = d;
-      // tt.Marker (like the Mapbox/MapLibre marker it wraps) doesn't cleanly
-      // support swapping its DOM element in place, so on each update we
-      // just move the existing marker and, if its icon needs to change
-      // (status/direction/staleness), remove and recreate it.
-      const iconKey = `${d.direction}|${d.stale}|${d.display_status}`;
-      const existing = jeepMarkers[d.account_id];
-      if (existing && existing._jlIconKey === iconKey) {
-        existing.setLngLat([lng, lat]);
-        if (existing._jlPopup && existing._jlPopup.isOpen()) existing._jlPopup.setHTML(buildPopup(d));
-      } else {
-        if (existing) existing.remove();
-        const wasOpen = existing && existing._jlPopup && existing._jlPopup.isOpen();
-        const popup = new tt.Popup({ offset: 30, maxWidth: '260px' }).setHTML(buildPopup(d));
-        const m = new tt.Marker({ element: makeJeepEl(d.direction, d.stale, d.display_status) })
-          .setLngLat([lng, lat])
-          .setPopup(popup)
-          .addTo(map);
-        m._jlIconKey = iconKey;
-        m._jlPopup   = popup;
-        if (wasOpen) m.togglePopup();
-        jeepMarkers[d.account_id] = m;
+      _fleetUpdate(d, lat, lng, now);
+    });
+    Object.keys(jeepFleet).forEach(id => {
+      if (!seen.has(id)) {
+        delete jeepFleet[id]; delete jeepData[id];
+        if (_openPopup && String(_openPopupId) === id) _openPopup.remove();
       }
     });
-    Object.keys(jeepMarkers).forEach(id => {
-      if (!seen.has(+id)) { jeepMarkers[id].remove(); delete jeepMarkers[id]; delete jeepData[id]; }
-    });
-    const count = seen.size;
-    document.getElementById('liveCount').textContent = count === 0 ? 'No jeepneys online' : `${count} jeepney${count !== 1 ? 's' : ''} live`;
-    document.getElementById('livePill').classList.add('visible');
-  } catch(e) { console.warn('Poll failed:', e); }
-}
-pollJeepneys();
-setInterval(pollJeepneys, 8000);
+    if (_openPopup && jeepData[_openPopupId]) _openPopup.setHTML(buildPopup(jeepData[_openPopupId]));
 
+    const count = seen.size;
 
 /* ══════════════════════════════════════════════
    ROUTE TO NEAREST JEEPNEY
@@ -1294,7 +1425,7 @@ let userOrigin      = null;   // {lat, lng}
 let originMarker     = null;
 let routeLayerId     = 'route-to-jeep-layer';
 let routeSourceId    = 'route-to-jeep-source';
-let currentRouteMode = 'pedestrian'; // 'pedestrian' or 'car'
+const currentRouteMode = 'pedestrian';
 let targetJeepId     = null;
 let mapClickArmed    = false;
 
@@ -1397,15 +1528,7 @@ function setOriginAndRoute(lat, lng) {
   drawRoute();
 }
 
-function setRouteMode(mode) {
-  currentRouteMode = mode;
-  document.querySelectorAll('.ric-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  if (originMarker && userOrigin) {
-    originMarker.remove();
-    originMarker = new tt.Marker({ element: makeUserEl(mode) }).setLngLat([userOrigin.lng, userOrigin.lat]).addTo(map);
-  }
-  if (userOrigin && targetJeepId) drawRoute();
-}
+
 
 async function drawRoute() {
   if (!userOrigin || !targetJeepId) return;
@@ -1604,12 +1727,11 @@ function renderSearchResults(jeepMatches, locMatches, q) {
 }
 
 function selectSearchResult(id) {
-  const marker = jeepMarkers[id], d = jeepData[id];
-  if (!marker || !d) return;
-  // TomTom markers stay on the map once added (no per-layer hasLayer check
-  // needed the way Leaflet required); just fly to it and open its popup.
-  map.flyTo({ center: [parseFloat(d.lng), parseFloat(d.lat)], zoom: Math.max(map.getZoom(),17), duration: 600 });
-  marker.togglePopup();
+  const d = jeepData[id], f = jeepFleet[id];
+  if (!d || !f) return;
+  const c = _fleetCurrent(f, performance.now());
+  map.flyTo({ center: [c.lng, c.lat], zoom: Math.max(map.getZoom(), 17), duration: 600 });
+  openJeepPopup(id);
   searchResults.classList.remove('open');
   searchInput.value = d.unit_code || '';
   searchInput.blur();
@@ -1639,25 +1761,17 @@ searchInput.addEventListener('input', function() {
   const q = this.value.trim();
   const qLower = q.toLowerCase();
   const jeepMatches = [];
-  Object.entries(jeepMarkers).forEach(([id, marker]) => {
-    const d = jeepData[id]; if (!d) return;
+  Object.entries(jeepData).forEach(([id, d]) => {
     const hay = [d.unit_code, d.plate_no, d.route_name, d.driver_name].filter(Boolean).join(' ').toLowerCase();
-    // TomTom markers don't have Leaflet's hasLayer/addTo per-layer toggle;
-    // show/hide by toggling the marker element's display instead.
-    const el = marker.getElement ? marker.getElement() : null;
-    if (!qLower || hay.includes(qLower)) {
-      if (el) el.style.display = '';
-      if (qLower) jeepMatches.push([id,d]);
-    } else if (el) {
-      el.style.display = 'none';
-    }
+    if (qLower && hay.includes(qLower)) jeepMatches.push([id, d]);
   });
+  _jeepSetFilter(qLower ? jeepMatches.map(([id]) => +id) : null);
 
   renderSearchResults(jeepMatches, placeMatches, q);
 
   clearTimeout(geocodeTimer);
   if (q.length < 2) { placeMatches = []; renderSearchResults(jeepMatches, placeMatches, q); return; }
-    geocodeTimer = setTimeout(async () => {
+  geocodeTimer = setTimeout(async () => {
     placeMatches = await searchLocations(q);
     renderSearchResults(jeepMatches, placeMatches, searchInput.value.trim());
   }, 450);
@@ -1665,7 +1779,7 @@ searchInput.addEventListener('input', function() {
 searchInput.addEventListener('focus', function() { if (this.value.trim()) this.dispatchEvent(new Event('input')); });
 document.addEventListener('click', (e) => {
   if (!searchResults.contains(e.target) && e.target !== searchInput) searchResults.classList.remove('open');
-});
+});function applyTheme
 window.addEventListener('resize', () => map.resize());
 
 </script>
