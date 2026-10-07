@@ -1418,6 +1418,20 @@ async function pollJeepneys() {
 
     const count = seen.size;
 
+        document.getElementById('liveCount').textContent =
+      count + (count === 1 ? ' jeepney live' : ' jeepneys live');
+    document.getElementById('livePill').classList.toggle('visible', count > 0);
+
+    if (_jeepReady) _fleetKick();
+  } catch (e) {
+    console.warn('Poll failed:', e);
+  } finally {
+    _polling = false;
+  }
+}
+setInterval(pollJeepneys, POLL_MS);
+pollJeepneys();
+
 /* ══════════════════════════════════════════════
    ROUTE TO NEAREST JEEPNEY
 ══════════════════════════════════════════════ */
@@ -1779,7 +1793,7 @@ searchInput.addEventListener('input', function() {
 searchInput.addEventListener('focus', function() { if (this.value.trim()) this.dispatchEvent(new Event('input')); });
 document.addEventListener('click', (e) => {
   if (!searchResults.contains(e.target) && e.target !== searchInput) searchResults.classList.remove('open');
-});function applyTheme
+});
 window.addEventListener('resize', () => map.resize());
 
 </script>
