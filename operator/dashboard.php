@@ -1217,21 +1217,39 @@ function fetchRouteLogs(unitId) {
 }
 
 function buildTripLogItem(t) {
-  const statusClass = { completed:'status-completed','in-progress':'status-in-progress',cancelled:'status-cancelled' }[t.status]||'status-completed';
-  const statusLabel = { completed:'✓ Completed','in-progress':'⟳ In Progress',cancelled:'✕ Cancelled',scheduled:'⏱ Scheduled',active:'⟳ Active' }[t.status]||t.status;
-  const statusColor = { completed:'var(--green)','in-progress':'var(--cyan)',cancelled:'var(--red)',scheduled:'var(--text-muted)',active:'var(--cyan)' }[t.status]||'var(--text-muted)';
-  const dep = t.departure_time || '—';
-  const pax = parseInt(t.passenger_count)||0;
+  const statusClass = { completed:'status-completed', active:'status-in-progress', cancelled:'status-cancelled' }[t.status] || '';
+  const statusLabel = { completed:'✓ Completed', active:'⟳ Active', cancelled:'✕ Cancelled', scheduled:'⏱ Scheduled' }[t.status] || t.status;
+  const statusColor = { completed:'var(--green)', active:'var(--cyan)', cancelled:'var(--red)', scheduled:'var(--text-muted)' }[t.status] || 'var(--text-muted)';
+  const pax = parseInt(t.passenger_count) || 0;
+
+  const actual = t.started_at
+    ? `Started ${escHtml(t.started_at)}${t.completed_at ? ' → ' + escHtml(t.completed_at) : ''}`
+    : '';
+  const dur = t.duration_min != null ? `${parseInt(t.duration_min)} min` : '';
+  let punctual = '';
+  if (t.late_min != null) {
+    const m = parseInt(t.late_min);
+    punctual = m > 5  ? `<span style="color:var(--yellow)">${m} min late</span>`
+             : m < -5 ? `<span style="color:var(--green)">${-m} min early</span>`
+             :          `<span style="color:var(--green)">On time</span>`;
+  }
+
   return `<div class="trip-log-item ${statusClass}">
     <div class="trip-log-row">
-      <div class="trip-log-times">${escHtml(dep)}</div>
+      <div class="trip-log-times">${escHtml(t.departure_time || '—')}</div>
       <span style="font-size:10px;font-weight:700;color:${statusColor};">${statusLabel}</span>
     </div>
     <div class="trip-log-meta">
-      ${t.trip_date  ? `<span class="trip-log-date">${escHtml(t.trip_date)}</span>` : ''}
-      ${t.route_name ? `<span class="trip-log-route">${escHtml(t.route_name)}</span>` : ''}
-      ${pax > 0      ? `<span class="trip-log-pax">👥 ${pax} pax</span>` : ''}
+      ${t.trip_date   ? `<span class="trip-log-date">${escHtml(t.trip_date)}</span>` : ''}
+      ${t.route_name  ? `<span class="trip-log-route">${escHtml(t.route_name)}</span>` : ''}
+      ${t.driver_name ? `<span class="trip-log-route">👤 ${escHtml(t.driver_name)}</span>` : ''}
+      ${pax > 0       ? `<span class="trip-log-pax">👥 ${pax} pax</span>` : ''}
     </div>
+    ${(actual || punctual) ? `<div class="trip-log-meta" style="margin-top:6px;font-size:11px;color:var(--text-muted);">
+      ${actual   ? `<span>${actual}</span>` : ''}
+      ${dur      ? `<span>· ${dur}</span>` : ''}
+      ${punctual ? `<span>· ${punctual}</span>` : ''}
+    </div>` : ''}
   </div>`;
 }
 

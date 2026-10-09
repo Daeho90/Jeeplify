@@ -340,21 +340,25 @@ function handle_route_logs(PDO $pdo): void {
     try {
         // trips table: jeepney_id, route_name (varchar), departure_time (datetime), status
         // No arrival_time or passenger_count columns in this schema
-        $stmt = $pdo->prepare("
-            SELECT
-                t.id,
-                t.status,
-                DATE_FORMAT(t.departure_time, '%h:%i %p')  AS departure_time,
-                DATE_FORMAT(t.departure_time, '%b %d, %Y') AS trip_date,
-                t.route_name,
-                NULL AS arrival_time,
-                0    AS passenger_count,
-                NULL AS notes
-            FROM   trips t
-            WHERE  t.jeepney_id = ?
-            ORDER BY t.departure_time DESC
-            LIMIT 50
-        ");
+$stmt = $pdo->prepare("
+    SELECT
+        t.id,
+        t.status,
+        DATE_FORMAT(t.departure_time, '%h:%i %p')  AS departure_time,
+        DATE_FORMAT(t.departure_time, '%b %d, %Y') AS trip_date,
+        DATE_FORMAT(t.started_at,     '%h:%i %p')  AS started_at,
+        DATE_FORMAT(t.completed_at,   '%h:%i %p')  AS completed_at,
+        TIMESTAMPDIFF(MINUTE, t.started_at, t.completed_at)   AS duration_min,
+        TIMESTAMPDIFF(MINUTE, t.departure_time, t.started_at) AS late_min,
+        t.passenger_count,
+        t.route_name,
+        dp.full_name AS driver_name
+    FROM   trips t
+    LEFT JOIN driver_profiles dp ON dp.id = t.driver_id
+    WHERE  t.jeepney_id = ?
+    ORDER BY t.departure_time DESC
+    LIMIT 50
+");
         $stmt->execute([$unit_id]);
         $trips = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

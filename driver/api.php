@@ -265,7 +265,7 @@ function handle_update_trip_status(PDO $pdo): void {
     try {
         // Verify the trip belongs to this driver's jeepney
         $checkStmt = $pdo->prepare("
-            SELECT t.id
+            SELECT t.id, dp.id AS driver_id
             FROM   trips          t
             JOIN   driver_jeepney dj ON dj.jeepney_id = t.jeepney_id
             JOIN   driver_profiles dp ON dp.id = dj.driver_id
@@ -274,19 +274,23 @@ function handle_update_trip_status(PDO $pdo): void {
             LIMIT  1
         ");
         $checkStmt->execute([$tripId, $accountId]);
-        if (!$checkStmt->fetch()) {
+        $check = $checkStmt->fetch();
+        if (!$check) {
             echo json_encode(['ok' => false, 'message' => 'Trip not found or access denied']);
             return;
         }
 
         // Update status
-        $stmt = $pdo->prepare("
-            UPDATE trips
-            SET    status = ?
-            WHERE  id     = ?
-              AND  status NOT IN ('cancelled')
-        ");
-        $stmt->execute([$dbStatus, $tripId]);
+$stmt = $pdo->prepare("
+    UPDATE trips
+    SET    status       = ?,
+           driver_id    = COALESCE(driver_id, ?),
+           started_at   = COALESCE(started_at, NOW()),
+           completed_at = IF(? = 'completed', COALESCE(completed_at, NOW()), completed_at)
+    WHERE  id     = ?
+      AND  status NOT IN ('cancelled')
+");
+$stmt->execute([$dbStatus, $check['driver_id'], $dbStatus, $tripId]);
 
         // Mirror the driver-facing status (on_route/traffic/maintenance/complete)
         // directly into driver_locations so the commuter map always shows the right colour
