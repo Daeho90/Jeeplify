@@ -5,6 +5,9 @@
 //  Usage: require_once 'db.php';  then use $pdo
 // ════════════════════════════════════════════════════════════
 
+// Philippine time for PHP (date(), strtotime(), etc.)
+date_default_timezone_set('Asia/Manila');
+
 define('DB_HOST', getenv('DB_HOST'));
 define('DB_NAME', getenv('DB_NAME'));
 define('DB_USER', getenv('DB_USER'));
@@ -24,6 +27,8 @@ try {
             PDO::MYSQL_ATTR_SSL_CA       => DB_SSL_CA,
         ]
     );
+    // Philippine time for MySQL (NOW(), CURDATE(), etc.)
+    $pdo->exec("SET time_zone = '+08:00'");
 } catch (PDOException $e) {
     // Don't expose DB details to the browser
     error_log('DB connection failed: ' . $e->getMessage());
