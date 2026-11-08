@@ -595,6 +595,58 @@ if ($accountId) {
     .booking-cancel:active   { background: rgba(239,68,68,.18); }
     .booking-cancel:disabled { opacity: .4; cursor: not-allowed; }
 
+    /* ── ROUTE LINE + TRIP CARD ── */
+    .route-view-btn {
+      flex-shrink: 0; height: 30px; padding: 0 12px; border-radius: 999px;
+      border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.12);
+      color: var(--amber); font-size: 10.5px; font-weight: 700;
+      font-family: 'Montserrat', sans-serif; cursor: pointer;
+    }
+    .route-view-btn:active { background: rgba(245,158,11,.25); }
+    .route-chip {
+      position: absolute; top: calc(184px + var(--safe-t)); left: 50%;
+      transform: translateX(-50%); z-index: 20;
+      display: none; align-items: center; gap: 8px;
+      background: rgba(8,14,28,.9); backdrop-filter: blur(20px);
+      border: 1px solid rgba(245,158,11,.4); border-radius: 999px;
+      padding: 6px 8px 6px 14px; font-size: 11px; font-weight: 700;
+      max-width: calc(100vw - 40px);
+    }
+    .route-chip.visible { display: flex; }
+    .route-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .route-chip button {
+      width: 22px; height: 22px; border-radius: 50%; border: none; flex-shrink: 0;
+      background: rgba(255,255,255,.1); color: var(--text); cursor: pointer;
+    }
+    .trip-card {
+      position: absolute; bottom: calc(100px + var(--safe-b));
+      left: 16px; right: 16px; max-width: 420px; margin: 0 auto; z-index: 26;
+      background: rgba(8,14,28,.97);
+      backdrop-filter: blur(28px) saturate(180%); -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid var(--border2); border-radius: 20px; padding: 14px 14px 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      max-height: min(46vh, 380px); display: flex; flex-direction: column;
+      opacity: 0; transform: translateY(14px); pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    .trip-card.visible { opacity: 1; transform: none; pointer-events: all; }
+    .trip-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .trip-title { font-size: 13px; font-weight: 800; }
+    .trip-sub { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+    .trip-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
+    .trip-opt {
+      display: flex; align-items: center; gap: 11px; padding: 11px 12px; cursor: pointer;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      transition: background .15s, border-color .15s;
+    }
+    .trip-opt:active, .trip-opt.picked { background: rgba(16,185,129,.12); border-color: rgba(16,185,129,.4); }
+    .trip-ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(245,158,11,.14); font-size: 17px; }
+    .trip-text { flex: 1; min-width: 0; }
+    .trip-name { font-size: 12.5px; font-weight: 800; }
+    .trip-meta { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+    .trip-meta.live { color: #34d399; font-weight: 700; }
+    .trip-go { font-size: 10px; font-weight: 700; color: var(--amber); flex-shrink: 0; }
+
     /* ── DESKTOP ── */
     @media (min-width: 768px) {
       .bottom-nav { bottom: 28px; }
@@ -760,6 +812,12 @@ if ($accountId) {
       <span id="liveCount">0 jeepneys live</span>
     </div>
 
+    <!-- ACTIVE ROUTE CHIP -->
+    <div class="route-chip" id="routeChip">
+      <span id="routeChipName"></span>
+      <button onclick="clearRouteLine()">✕</button>
+    </div>
+
     <!-- ROUTE TO JEEPNEY CARD -->
     <div class="route-info-card" id="routeInfoCard">
       <div class="ric-top">
@@ -773,6 +831,19 @@ if ($accountId) {
       </div>
       <div class="ric-hint" id="ricHint">Tap the map to set your starting point, or use GPS 📍</div>
     </div>
+
+    <!-- JEEPNEYS TO A SEARCHED PLACE -->
+    <div class="trip-card" id="tripCard">
+      <div class="trip-head">
+        <div>
+          <div class="trip-title" id="tripTitle">Jeepneys</div>
+          <div class="trip-sub" id="tripSub"></div>
+        </div>
+        <button class="ric-close" onclick="closeTrip()">✕</button>
+      </div>
+      <div class="trip-list" id="tripList"></div>
+    </div>
+
     <!-- BOTTOM NAV -->
     <nav class="bottom-nav">
       <div class="nav-tab active" id="routesTab" onclick="setTab(this,'routes'); openSheet('routes');">
@@ -991,6 +1062,7 @@ function renderRoutesSheet(routes) {
             <div class="route-name">${esc(r.name)}</div>
             ${r.description ? `<div class="route-desc">${esc(r.description)}</div>` : ''}
           </div>
+          <button class="route-view-btn" onclick="showRouteLine(${r.id})">View route</button>
         </div>
         <div class="route-stats">
           <div class="route-stat"><span class="dot" style="background:#10b981"></span>${r.live_count} available now</div>
@@ -1370,6 +1442,7 @@ map.on('load', _jeepInitLayers);
 
 function _jeepApplyTheme() {
   _jeepNight = document.getElementById('map').classList.contains('jl-filter-invert');
+  _routeRestyle();
   if (_jeepReady) _fleetKick();
 }
 function _jeepSetFilter(ids) {            // ids = array to show only those, null = show all
@@ -1766,6 +1839,7 @@ function selectPlaceResult(idx) {
     .addTo(map);
   placeMarker.togglePopup();
   map.flyTo({ center: [lng, lat], zoom: 16, duration: 600 });
+  showJeepsForPlace(lat, lng, loc.display_name.split(',')[0]);
   searchResults.classList.remove('open');
   searchInput.value = loc.display_name.split(',')[0];
   searchInput.blur();
@@ -1795,6 +1869,319 @@ document.addEventListener('click', (e) => {
   if (!searchResults.contains(e.target) && e.target !== searchInput) searchResults.classList.remove('open');
 });
 window.addEventListener('resize', () => map.resize());
+
+/* ══════════════════════════════════════════════
+   MANUAL ROUTES — key = exact route name (or id) from ?action=routes
+   Points in driving order. Add every turn/stop for an accurate line.
+══════════════════════════════════════════════ */
+const MANUAL_ROUTES = {
+  'Shopping via SM Libertad': [
+    { lat: 10.6245721, lng: 122.974817 },    // Mansilingan Terminal 1 (placeholder: add the real route points between)
+    { lat: 10.6665753, lng: 122.9463391 }    // Mansilingan Terminal 2
+  ],
+};
+
+/* ══════════════════════════════════════════════
+   JEEPNEY ROUTE LINE (road-snapped, Grab style)
+══════════════════════════════════════════════ */
+const RL_SRC = 'jl-route-src', RL_CASING = 'jl-route-casing',
+      RL_LINE = 'jl-route-line', RL_ARROWS = 'jl-route-arrows';
+const WK_SRC = 'jl-walk-src', WK_LINE = 'jl-walk-line';
+const RL_COLOR = '#10b981';
+const routeGeomCache = {};
+let activeRouteId = null, routeEndMarkers = [];
+
+function _rlColor(hex) {                  // pre-correct colours for the night filter
+  if (!_jeepNight) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const o = nightify({ data: [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255] }).data;
+  return `rgb(${Math.round(o[0])},${Math.round(o[1])},${Math.round(o[2])})`;
+}
+function _routeRestyle() {
+  if (map.getLayer(RL_LINE)) {
+    map.setPaintProperty(RL_LINE,   'line-color', _rlColor(RL_COLOR));
+    map.setPaintProperty(RL_CASING, 'line-color', _rlColor('#ffffff'));
+  }
+  if (map.getLayer(WK_LINE)) map.setPaintProperty(WK_LINE, 'line-color', _rlColor('#3b82f6'));
+}
+
+async function _snapChunk(pts) {
+  const loc = pts.map(w => `${w.lat},${w.lng}`).join(':');
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${loc}/json` +
+              `?key=${TOMTOM_KEY}&travelMode=car&routeType=fastest&traffic=false`;
+  const data = await (await fetch(url)).json();
+  const route = data.routes?.[0];
+  if (!route) throw new Error('No road route for chunk');
+  const out = [];
+  route.legs.forEach(leg => leg.points.forEach(p => out.push([p.longitude, p.latitude])));
+  return out;
+}
+
+async function getRouteCoords(r) {
+  if (routeGeomCache[r.id]) return routeGeomCache[r.id];
+  let coords = null, w = null;
+
+  const manual = MANUAL_ROUTES[r.id] ?? MANUAL_ROUTES[r.name];
+  if (manual && manual.length > 1) w = manual;
+  else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
+
+  if (w) {
+    w = w.map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) }));
+    const CHUNK = 30;
+    coords = [];
+    for (let i = 0; i < w.length - 1; i += CHUNK - 1) {
+      const part = await _snapChunk(w.slice(i, i + CHUNK));
+      coords.push(...(coords.length ? part.slice(1) : part));
+    }
+  } else if (Array.isArray(r.path) && r.path.length > 1) {
+    coords = r.path.map(p => [parseFloat(p.lng ?? p[1]), parseFloat(p.lat ?? p[0])]);
+  }
+  if (coords?.length > 1) routeGeomCache[r.id] = coords;
+  return coords;
+}
+
+function _routeEndEl(color) {
+  const el = document.createElement('div');
+  el.style.cssText = `width:16px;height:16px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);`;
+  return el;
+}
+function _addRouteArrow() {
+  if (map.hasImage('jl-route-arrow')) return;
+  const s = 32, c = document.createElement('canvas');
+  c.width = c.height = s;
+  const x = c.getContext('2d');
+  x.strokeStyle = '#fff'; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(10, 8); x.lineTo(22, 16); x.lineTo(10, 24); x.stroke();
+  map.addImage('jl-route-arrow', x.getImageData(0, 0, s, s));
+}
+
+async function showRouteLine(routeId, opts = {}) {
+  const r = (routesCache || []).find(x => String(x.id) === String(routeId));
+  if (!r) return;
+  if (!opts.keepSheets) closeSheets();
+  if (!opts.force && activeRouteId === r.id) { clearRouteLine(); return; }
+  clearRouteLine();
+
+  let coords;
+  try { coords = await getRouteCoords(r); }
+  catch (e) { console.warn('Route line failed:', e); }
+  if (!coords || coords.length < 2) { alert('This route has no path set up yet.'); return; }
+
+  map.addSource(RL_SRC, {
+    type: 'geojson',
+    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords } }
+  });
+  const labelLayer = map.getStyle().layers.find(l => l.type === 'symbol' && l.layout?.['text-field']);
+  const before = labelLayer ? labelLayer.id : (map.getLayer('jeep-glow') ? 'jeep-glow' : undefined);
+  const W = (a, b, c, d) => ['interpolate', ['linear'], ['zoom'], 11, a, 14, b, 17, c, 19, d];
+
+  map.addLayer({
+    id: RL_CASING, type: 'line', source: RL_SRC,
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': _rlColor('#ffffff'), 'line-width': W(5, 11, 20, 30), 'line-opacity': 1 }
+  }, before);
+  map.addLayer({
+    id: RL_LINE, type: 'line', source: RL_SRC,
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': _rlColor(RL_COLOR), 'line-width': W(3, 7, 14, 22), 'line-opacity': 1 }
+  }, before);
+  _addRouteArrow();
+  map.addLayer({
+    id: RL_ARROWS, type: 'symbol', source: RL_SRC, minzoom: 14,
+    layout: {
+      'symbol-placement': 'line', 'symbol-spacing': 70,
+      'icon-image': 'jl-route-arrow', 'icon-size': 0.55,
+      'icon-allow-overlap': true, 'icon-ignore-placement': true,
+      'icon-rotation-alignment': 'map'
+    }
+  }, before);
+
+  routeEndMarkers = [
+    new tt.Marker({ element: _routeEndEl('#10b981') }).setLngLat(coords[0]).addTo(map),
+    new tt.Marker({ element: _routeEndEl('#ef4444') }).setLngLat(coords[coords.length - 1]).addTo(map),
+  ];
+  activeRouteId = r.id;
+  document.getElementById('routeChipName').textContent = r.name;
+  document.getElementById('routeChip').classList.add('visible');
+
+  if (!opts.noFit) {
+    const bounds = new tt.LngLatBounds();
+    coords.forEach(c => bounds.extend(c));
+    map.fitBounds(bounds, { padding: { top: 120, bottom: 140, left: 50, right: 50 }, duration: 600 });
+  }
+}
+
+function clearRouteLine() {
+  [RL_ARROWS, RL_LINE, RL_CASING].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+  if (map.getSource(RL_SRC)) map.removeSource(RL_SRC);
+  routeEndMarkers.forEach(m => m.remove());
+  routeEndMarkers = [];
+  activeRouteId = null;
+  document.getElementById('routeChip').classList.remove('visible');
+}
+
+/* ══════════════════════════════════════════════
+   PLACE → WHICH JEEPNEY DO I TAKE
+══════════════════════════════════════════════ */
+const NEAR_M = 500, WALK_M_PER_MIN = 80;
+let tripActive = null, tripMarkers = [], tripTok = 0;
+
+function _nearestOnPath(coords, lat, lng) {
+  const ky = 111320, kx = 111320 * Math.cos(lat * Math.PI / 180);
+  let best = { distM: Infinity, idx: 0, point: coords[0] };
+  for (let i = 0; i < coords.length - 1; i++) {
+    const ax = (coords[i][0] - lng) * kx,     ay = (coords[i][1] - lat) * ky;
+    const bx = (coords[i + 1][0] - lng) * kx, by = (coords[i + 1][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+    let t = len2 ? -(ax * dx + ay * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(ax + t * dx, ay + t * dy);
+    if (d < best.distM) best = {
+      distM: d, idx: i + t,
+      point: [coords[i][0] + t * (coords[i + 1][0] - coords[i][0]),
+              coords[i][1] + t * (coords[i + 1][1] - coords[i][1])]
+    };
+  }
+  return best;
+}
+
+async function findRoutesNear(lat, lng) {
+  if (!routesCache) await loadRoutes();
+  const out = [];
+  await Promise.all((routesCache || []).map(async r => {
+    try {
+      const coords = await getRouteCoords(r);
+      if (!coords || coords.length < 2) return;
+      out.push({ r, coords, hit: _nearestOnPath(coords, lat, lng) });
+    } catch (e) { console.warn('Route skipped:', r.name, e); }
+  }));
+  return out.sort((a, b) => a.hit.distM - b.hit.distM);
+}
+
+function _nearestLiveUnit(r, lat, lng) {
+  let best = null;
+  (r.jeepneys || []).forEach(u => {
+    const d = jeepData[u.account_id];
+    if (!d || d.stale) return;
+    const la = parseFloat(d.lat), lo = parseFloat(d.lng);
+    if (!isFinite(la) || !isFinite(lo)) return;
+    const km = haversineKm(lat, lng, la, lo);
+    if (!best || km < best.km) best = { u, km };
+  });
+  return best;
+}
+
+async function showJeepsForPlace(lat, lng, name) {
+  clearTrip();
+  const tok = ++tripTok;
+  document.getElementById('routeInfoCard').classList.remove('visible');
+  document.getElementById('tripTitle').textContent = `Jeepneys to ${name}`;
+  document.getElementById('tripSub').textContent = '';
+  document.getElementById('tripList').innerHTML = '<div class="sheet-empty">Finding routes…</div>';
+  document.getElementById('tripCard').classList.add('visible');
+
+  const all = await findRoutesNear(lat, lng);
+  if (tok !== tripTok) return;
+
+  const near  = all.filter(o => o.hit.distM <= NEAR_M);
+  const shown = near.length ? near : all.slice(0, 1);
+  tripActive = { lat, lng, name, shown };
+
+  if (!shown.length) {
+    document.getElementById('tripList').innerHTML = '<div class="sheet-empty">No routes have a path set up yet.</div>';
+    return;
+  }
+  document.getElementById('tripSub').textContent = near.length
+    ? `${near.length} modernized jeepney route${near.length > 1 ? 's' : ''} pass near here. Tap one to see the line.`
+    : `No route passes within ${NEAR_M} m. The closest one is shown below.`;
+
+  document.getElementById('tripList').innerHTML = shown.map((o, i) => {
+    const m = Math.round(o.hit.distM);
+    const walk = Math.max(1, Math.round(m / WALK_M_PER_MIN));
+    const live = (o.r.jeepneys || []).filter(u => jeepData[u.account_id] && !jeepData[u.account_id].stale).length;
+    const nu   = userOrigin ? _nearestLiveUnit(o.r, userOrigin.lat, userOrigin.lng) : null;
+    const liveText = live
+      ? `● ${live} live now${nu ? ` · nearest ${nu.km.toFixed(1)} km from you` : ''}`
+      : 'No jeepney online on this route right now';
+    return `
+      <div class="trip-opt" id="tripOpt${i}" onclick="pickTripOption(${i})">
+        <div class="trip-ico">🚌</div>
+        <div class="trip-text">
+          <div class="trip-name">${esc(o.r.name)}</div>
+          <div class="trip-meta">Drop-off about ${m} m from ${esc(name)} · ${walk} min walk</div>
+          <div class="trip-meta ${live ? 'live' : ''}">${liveText}</div>
+        </div>
+        <span class="trip-go">View →</span>
+      </div>`;
+  }).join('');
+}
+
+async function _walkCoords(from, to) {
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${from.lat},${from.lng}:${to.lat},${to.lng}/json` +
+              `?key=${TOMTOM_KEY}&travelMode=pedestrian&routeType=shortest`;
+  const data = await (await fetch(url)).json();
+  const route = data.routes?.[0];
+  if (!route) return null;
+  const out = [];
+  route.legs.forEach(l => l.points.forEach(p => out.push([p.longitude, p.latitude])));
+  return out;
+}
+function _drawWalk(lines) {
+  const fc = { type: 'FeatureCollection', features: lines.filter(Boolean).map(c =>
+    ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } })) };
+  if (map.getSource(WK_SRC)) { map.getSource(WK_SRC).setData(fc); return; }
+  map.addSource(WK_SRC, { type: 'geojson', data: fc });
+  map.addLayer({
+    id: WK_LINE, type: 'line', source: WK_SRC,
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: {
+      'line-color': _rlColor('#3b82f6'),
+      'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3, 17, 7, 19, 10],
+      'line-dasharray': [1, 1.6]
+    }
+  }, map.getLayer('jeep-glow') ? 'jeep-glow' : undefined);
+}
+
+async function pickTripOption(i) {
+  const t = tripActive, o = t?.shown[i];
+  if (!o) return;
+  document.querySelectorAll('.trip-opt').forEach(el => el.classList.remove('picked'));
+  document.getElementById('tripOpt' + i)?.classList.add('picked');
+  tripMarkers.forEach(m => m.remove()); tripMarkers = [];
+
+  await showRouteLine(o.r.id, { force: true, keepSheets: true, noFit: true });
+  _jeepSetFilter((o.r.jeepneys || []).map(u => +u.account_id));
+
+  const drop = { lat: o.hit.point[1], lng: o.hit.point[0] };
+  tripMarkers.push(new tt.Marker({ element: _routeEndEl('#f59e0b') }).setLngLat(o.hit.point).addTo(map));
+
+  const walks = [ _walkCoords(drop, { lat: t.lat, lng: t.lng }).catch(() => null) ];
+  const bounds = new tt.LngLatBounds();
+  o.coords.forEach(c => bounds.extend(c));
+  bounds.extend([t.lng, t.lat]);
+  if (userOrigin) {
+    const board = _nearestOnPath(o.coords, userOrigin.lat, userOrigin.lng);
+    if (board.distM > 30) walks.push(_walkCoords(userOrigin, { lat: board.point[1], lng: board.point[0] }).catch(() => null));
+    bounds.extend([userOrigin.lng, userOrigin.lat]);
+  }
+  _drawWalk(await Promise.all(walks));
+  map.fitBounds(bounds, { padding: { top: 120, bottom: 260, left: 50, right: 50 }, duration: 600 });
+}
+
+function clearTrip() {
+  tripTok++;
+  tripActive = null;
+  tripMarkers.forEach(m => m.remove()); tripMarkers = [];
+  if (map.getLayer(WK_LINE)) map.removeLayer(WK_LINE);
+  if (map.getSource(WK_SRC)) map.removeSource(WK_SRC);
+  clearRouteLine();
+  _jeepSetFilter(null);
+  document.getElementById('tripCard').classList.remove('visible');
+}
+function closeTrip() {
+  clearTrip();
+  if (placeMarker) { placeMarker.remove(); placeMarker = null; }
+}
 
 </script>
 </body>
