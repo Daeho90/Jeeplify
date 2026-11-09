@@ -1875,12 +1875,19 @@ window.addEventListener('resize', () => map.resize());
    Points in driving order. Add every turn/stop for an accurate line.
 ══════════════════════════════════════════════ */
 const MANUAL_ROUTES = {
-  'Shopping via SM Libertad': [
-    { lat: 10.6245721, lng: 122.974817 },    // Mansilingan Terminal 1 (placeholder: add the real route points between)
+  // Southbound: Central Market side -> Mansilingan
+  'Central Market via City Heights Mansilingan': [
+    { lat: 10.6665753, lng: 122.9463391 },   // Mansilingan Terminal 2
+    // add points through City Heights and Central Market here
+    { lat: 10.6245721, lng: 122.974817 }     // Mansilingan Terminal 1
+  ],
+  // Northbound: Mansilingan -> Central Market side
+  'Mansilingan via City Heights Central Market': [
+    { lat: 10.6245721, lng: 122.974817 },    // Mansilingan Terminal 1
+    // add points through City Heights and Central Market here
     { lat: 10.6665753, lng: 122.9463391 }    // Mansilingan Terminal 2
   ],
 };
-
 /* ══════════════════════════════════════════════
    JEEPNEY ROUTE LINE (road-snapped, Grab style)
 ══════════════════════════════════════════════ */
