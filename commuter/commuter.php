@@ -2140,7 +2140,6 @@ async function showJeepsForPlace(lat, lng, name) {
   }).join('');
 }
 
-document.getElementById('tripCard').classList.remove('compact');
 
 async function _walkCoords(from, to) {
   const url = `https://api.tomtom.com/routing/1/calculateRoute/${from.lat},${from.lng}:${to.lat},${to.lng}/json` +
@@ -2218,6 +2217,23 @@ function expandTrip() {                       // "Change" button: show the route
   document.getElementById('tripTitle').textContent = t.listTitle;
   document.getElementById('tripSub').textContent   = t.listSub;
   document.getElementById('tripCard').classList.remove('compact');
+}
+
+function clearTrip() {
+  tripTok++;
+  tripActive = null;
+  tripMarkers.forEach(m => m.remove()); tripMarkers = [];
+  if (map.getLayer(WK_LINE)) map.removeLayer(WK_LINE);
+  if (map.getSource(WK_SRC)) map.removeSource(WK_SRC);
+  clearRouteLine();
+  _jeepSetFilter(null);
+  const card = document.getElementById('tripCard');
+  card.classList.remove('compact');
+  card.classList.remove('visible');
+}
+function closeTrip() {
+  clearTrip();
+  if (placeMarker) { placeMarker.remove(); placeMarker = null; }
 }
 
 </script>
