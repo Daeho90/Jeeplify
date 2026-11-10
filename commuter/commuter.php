@@ -647,6 +647,20 @@ if ($accountId) {
     .trip-meta.live { color: #34d399; font-weight: 700; }
     .trip-go { font-size: 10px; font-weight: 700; color: var(--amber); flex-shrink: 0; }
 
+
+    .trip-card { max-height: min(36vh, 300px); }
+.trip-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.trip-change {
+  display: none; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.12);
+  color: var(--amber); font-size: 10.5px; font-weight: 700;
+  font-family: 'Montserrat', sans-serif; cursor: pointer;
+}
+.trip-card.compact { padding: 10px 12px; max-height: none; }
+.trip-card.compact .trip-head { margin-bottom: 0; align-items: center; }
+.trip-card.compact .trip-list { display: none; }
+.trip-card.compact .trip-change { display: inline-flex; }
+
     /* ── DESKTOP ── */
     @media (min-width: 768px) {
       .bottom-nav { bottom: 28px; }
@@ -839,7 +853,10 @@ if ($accountId) {
           <div class="trip-title" id="tripTitle">Jeepneys</div>
           <div class="trip-sub" id="tripSub"></div>
         </div>
-        <button class="ric-close" onclick="closeTrip()">✕</button>
+        <div class="trip-actions">
+  <button class="trip-change" onclick="expandTrip()">Change</button>
+  <button class="ric-close" onclick="closeTrip()">✕</button>
+</div>
       </div>
       <div class="trip-list" id="tripList"></div>
     </div>
@@ -1838,7 +1855,7 @@ function selectPlaceResult(idx) {
     .setPopup(popup)
     .addTo(map);
   placeMarker.togglePopup();
-  map.flyTo({ center: [lng, lat], zoom: 16, duration: 600 });
+  map.flyTo({ center: [lng, lat], zoom: 16, duration: 600, offset: [0, -110] });
   showJeepsForPlace(lat, lng, loc.display_name.split(',')[0]);
   searchResults.classList.remove('open');
   searchInput.value = loc.display_name.split(',')[0];
@@ -2123,6 +2140,8 @@ async function showJeepsForPlace(lat, lng, name) {
   }).join('');
 }
 
+document.getElementById('tripCard').classList.remove('compact');
+
 async function _walkCoords(from, to) {
   const url = `https://api.tomtom.com/routing/1/calculateRoute/${from.lat},${from.lng}:${to.lat},${to.lng}/json` +
               `?key=${TOMTOM_KEY}&travelMode=pedestrian&routeType=shortest`;
@@ -2152,15 +2171,28 @@ function _drawWalk(lines) {
 async function pickTripOption(i) {
   const t = tripActive, o = t?.shown[i];
   if (!o) return;
+  const card = document.getElementById('tripCard');
+  if (t.listSub === undefined) {              // remember the list text for "Change"
+    t.listTitle = document.getElementById('tripTitle').textContent;
+    t.listSub   = document.getElementById('tripSub').textContent;
+  }
   document.querySelectorAll('.trip-opt').forEach(el => el.classList.remove('picked'));
   document.getElementById('tripOpt' + i)?.classList.add('picked');
   tripMarkers.forEach(m => m.remove()); tripMarkers = [];
 
   await showRouteLine(o.r.id, { force: true, keepSheets: true, noFit: true });
+  if (tripActive !== t) return;               // user searched something else meanwhile
+  document.getElementById('routeChip').classList.remove('visible');   // the card already names the route
   _jeepSetFilter((o.r.jeepneys || []).map(u => +u.account_id));
 
   const drop = { lat: o.hit.point[1], lng: o.hit.point[0] };
   tripMarkers.push(new tt.Marker({ element: _routeEndEl('#f59e0b') }).setLngLat(o.hit.point).addTo(map));
+
+  // shrink the card so the map is visible
+  const m = Math.round(o.hit.distM), walk = Math.max(1, Math.round(m / WALK_M_PER_MIN));
+  document.getElementById('tripTitle').textContent = o.r.name;
+  document.getElementById('tripSub').textContent = `Get off about ${m} m from ${t.name} · ${walk} min walk`;
+  card.classList.add('compact');
 
   const walks = [ _walkCoords(drop, { lat: t.lat, lng: t.lng }).catch(() => null) ];
   const bounds = new tt.LngLatBounds();
@@ -2171,23 +2203,21 @@ async function pickTripOption(i) {
     if (board.distM > 30) walks.push(_walkCoords(userOrigin, { lat: board.point[1], lng: board.point[0] }).catch(() => null));
     bounds.extend([userOrigin.lng, userOrigin.lat]);
   }
-  _drawWalk(await Promise.all(walks));
-  map.fitBounds(bounds, { padding: { top: 120, bottom: 260, left: 50, right: 50 }, duration: 600 });
+  const lines = await Promise.all(walks);
+  if (tripActive !== t) return;
+  _drawWalk(lines);
+  map.fitBounds(bounds, {
+    padding: { top: 120, bottom: card.offsetHeight + 130, left: 50, right: 50 },
+    duration: 600
+  });
 }
 
-function clearTrip() {
-  tripTok++;
-  tripActive = null;
-  tripMarkers.forEach(m => m.remove()); tripMarkers = [];
-  if (map.getLayer(WK_LINE)) map.removeLayer(WK_LINE);
-  if (map.getSource(WK_SRC)) map.removeSource(WK_SRC);
-  clearRouteLine();
-  _jeepSetFilter(null);
-  document.getElementById('tripCard').classList.remove('visible');
-}
-function closeTrip() {
-  clearTrip();
-  if (placeMarker) { placeMarker.remove(); placeMarker = null; }
+function expandTrip() {                       // "Change" button: show the route list again
+  const t = tripActive;
+  if (!t) return;
+  document.getElementById('tripTitle').textContent = t.listTitle;
+  document.getElementById('tripSub').textContent   = t.listSub;
+  document.getElementById('tripCard').classList.remove('compact');
 }
 
 </script>
