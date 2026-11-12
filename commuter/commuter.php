@@ -1934,10 +1934,9 @@ async function getRouteCoords(r) {
 
   const manual = MANUAL_ROUTES[r.id] ?? MANUAL_ROUTES[r.name];
   if (manual && manual.length > 1) w = manual;
-  let coords = null, w = null;
+  else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
 
-  if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
-
+  if (w) {
     if (w.length > 40) {
       // already a dense traced line: draw it as is, no TomTom calls
       coords = w.map(p => [p.lng, p.lat]);
