@@ -1891,20 +1891,7 @@ window.addEventListener('resize', () => map.resize());
    MANUAL ROUTES — key = exact route name (or id) from ?action=routes
    Points in driving order. Add every turn/stop for an accurate line.
 ══════════════════════════════════════════════ */
-const MANUAL_ROUTES = {
-  // Southbound: Central Market side -> Mansilingan
-  'Central Market via City Heights Mansilingan': [
-    { lat: 10.6665753, lng: 122.9463391 },   // Mansilingan Terminal 2
-    // add points through City Heights and Central Market here
-    { lat: 10.6245721, lng: 122.974817 }     // Mansilingan Terminal 1
-  ],
-  // Northbound: Mansilingan -> Central Market side
-  'Mansilingan via City Heights Central Market': [
-    { lat: 10.6245721, lng: 122.974817 },    // Mansilingan Terminal 1
-    // add points through City Heights and Central Market here
-    { lat: 10.6665753, lng: 122.9463391 }    // Mansilingan Terminal 2
-  ],
-};
+const MANUAL_ROUTES = {};
 /* ══════════════════════════════════════════════
    JEEPNEY ROUTE LINE (road-snapped, Grab style)
 ══════════════════════════════════════════════ */
@@ -1950,7 +1937,9 @@ async function getRouteCoords(r) {
   else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
 
   if (w) {
-    w = w.map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) }));
+            w = w.map(p => Array.isArray(p)
+      ? { lat: parseFloat(p[0]), lng: parseFloat(p[1]) }
+      : { lat: parseFloat(p.lat), lng: parseFloat(p.lng) });
     const CHUNK = 30;
     coords = [];
     for (let i = 0; i < w.length - 1; i += CHUNK - 1) {
