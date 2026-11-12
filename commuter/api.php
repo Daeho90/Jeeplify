@@ -205,7 +205,7 @@ function handle_routes(PDO $pdo): void {
     try {
         $stmt = $pdo->query("
             SELECT
-                r.id AS route_id, r.name, r.description,
+                r.id AS route_id, r.name, r.description, r.waypoints, r.colour,
                 j.id AS jeepney_id, j.unit_code, j.plate_no, j.capacity,
                 j.status AS jeepney_status,
                 dl.account_id, dl.lat, dl.lng, dl.direction,
@@ -237,14 +237,15 @@ function handle_routes(PDO $pdo): void {
         foreach ($rows as $row) {
             $rid = (int) $row['route_id'];
             if (!isset($routes[$rid])) {
-                $routes[$rid] = [
-                    'id'          => $rid,
-                    'name'        => $row['name'],
-                    'description' => $row['description'],
-                    'live_count'  => 0,
-                    'jeepneys'    => [],
-                ];
-            }
+$routes[$rid] = [
+    'id'          => $rid,
+    'name'        => $row['name'],
+    'description' => $row['description'],
+    'waypoints'   => json_decode($row['waypoints'] ?? 'null', true) ?? [],
+    'colour'      => $row['colour'] ?? '#3388ff',
+    'live_count'  => 0,
+    'jeepneys'    => [],
+];
             if ($row['jeepney_id'] !== null && $row['account_id'] !== null) {
                 $routes[$rid]['jeepneys'][] = [
                     'id'             => (int) $row['jeepney_id'],
