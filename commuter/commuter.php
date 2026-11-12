@@ -1970,6 +1970,14 @@ function _addRouteArrow() {
   map.addImage('jl-route-arrow', x.getImageData(0, 0, s, s));
 }
 
+function _pt(p) {
+  const isArr = Array.isArray(p);
+  const lat = parseFloat(p?.lat ?? p?.latitude  ?? (isArr ? p[0] : undefined));
+  const lng = parseFloat(p?.lng ?? p?.lon ?? p?.longitude ?? (isArr ? p[1] : undefined));
+  return (isFinite(lat) && isFinite(lng)) ? { lat, lng } : null;
+}
+
+
 async function showRouteLine(routeId, opts = {}) {
   const r = (routesCache || []).find(x => String(x.id) === String(routeId));
   if (!r) return;
@@ -1978,12 +1986,6 @@ async function showRouteLine(routeId, opts = {}) {
   clearRouteLine();
 
   let coords;
-  function _pt(p) {
-  const isArr = Array.isArray(p);
-  const lat = parseFloat(p?.lat ?? p?.latitude  ?? (isArr ? p[0] : undefined));
-  const lng = parseFloat(p?.lng ?? p?.lon ?? p?.longitude ?? (isArr ? p[1] : undefined));
-  return (isFinite(lat) && isFinite(lng)) ? { lat, lng } : null;
-}
   try { coords = await getRouteCoords(r); }
   catch (e) { console.warn('Route line failed:', e); }
   if (!coords || coords.length < 2) { alert('This route has no path set up yet.'); return; }
@@ -2135,7 +2137,9 @@ async function showJeepsForPlace(lat, lng, name) {
         <span class="trip-go">View →</span>
       </div>`;
   }).join('');
+  if (near.length) pickTripOption(0);
 }
+
 
 
 async function _walkCoords(from, to) {
