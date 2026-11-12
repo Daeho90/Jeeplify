@@ -233,19 +233,22 @@ function handle_routes(PDO $pdo): void {
 
         $rows = $stmt->fetchAll();
 
-        $routes = [];
+                $routes = [];
         foreach ($rows as $row) {
             $rid = (int) $row['route_id'];
+
             if (!isset($routes[$rid])) {
-$routes[$rid] = [
-    'id'          => $rid,
-    'name'        => $row['name'],
-    'description' => $row['description'],
-    'waypoints'   => json_decode($row['waypoints'] ?? 'null', true) ?? [],
-    'colour'      => $row['colour'] ?? '#3388ff',
-    'live_count'  => 0,
-    'jeepneys'    => [],
-];
+                $routes[$rid] = [
+                    'id'          => $rid,
+                    'name'        => $row['name'],
+                    'description' => $row['description'],
+                    'waypoints'   => json_decode($row['waypoints'] ?? 'null', true) ?? [],
+                    'colour'      => $row['colour'] ?? '#3388ff',
+                    'live_count'  => 0,
+                    'jeepneys'    => [],
+                ];
+            }
+
             if ($row['jeepney_id'] !== null && $row['account_id'] !== null) {
                 $routes[$rid]['jeepneys'][] = [
                     'id'             => (int) $row['jeepney_id'],
@@ -270,7 +273,7 @@ $routes[$rid] = [
         }
 
         echo json_encode(['ok' => true, 'routes' => array_values($routes)]);
-
+        
     } catch (PDOException $e) {
         error_log('api/routes: ' . $e->getMessage());
         http_response_code(500);

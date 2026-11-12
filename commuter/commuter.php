@@ -1891,7 +1891,6 @@ window.addEventListener('resize', () => map.resize());
    MANUAL ROUTES — key = exact route name (or id) from ?action=routes
    Points in driving order. Add every turn/stop for an accurate line.
 ══════════════════════════════════════════════ */
-const MANUAL_ROUTES = {};
 /* ══════════════════════════════════════════════
    JEEPNEY ROUTE LINE (road-snapped, Grab style)
 ══════════════════════════════════════════════ */
@@ -1936,15 +1935,22 @@ async function getRouteCoords(r) {
   if (manual && manual.length > 1) w = manual;
   else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
 
-  if (w) {
-            w = w.map(p => Array.isArray(p)
+   if (w) {
+    w = w.map(p => Array.isArray(p)
       ? { lat: parseFloat(p[0]), lng: parseFloat(p[1]) }
       : { lat: parseFloat(p.lat), lng: parseFloat(p.lng) });
-    const CHUNK = 30;
-    coords = [];
-    for (let i = 0; i < w.length - 1; i += CHUNK - 1) {
-      const part = await _snapChunk(w.slice(i, i + CHUNK));
-      coords.push(...(coords.length ? part.slice(1) : part));
+
+    if (w.length > 40) {
+      // already a dense traced line: draw it as is, no TomTom calls
+      coords = w.map(p => [p.lng, p.lat]);
+    } else {
+      // short list of stops: snap them to the road
+      const CHUNK = 30;
+      coords = [];
+      for (let i = 0; i < w.length - 1; i += CHUNK - 1) {
+        const part = await _snapChunk(w.slice(i, i + CHUNK));
+        coords.push(...(coords.length ? part.slice(1) : part));
+      }
     }
   } else if (Array.isArray(r.path) && r.path.length > 1) {
     coords = r.path.map(p => [parseFloat(p.lng ?? p[1]), parseFloat(p.lat ?? p[0])]);
