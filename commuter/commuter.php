@@ -1937,11 +1937,10 @@ async function getRouteCoords(r) {
   else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
 
   if (w) {
+    w = w.map(_pt).filter(Boolean);              // clean points
     if (w.length > 40) {
-      // already a dense traced line: draw it as is, no TomTom calls
       coords = w.map(p => [p.lng, p.lat]);
-    } else {
-      // short list of stops: snap them to the road
+    } else if (w.length > 1) {
       const CHUNK = 30;
       coords = [];
       for (let i = 0; i < w.length - 1; i += CHUNK - 1) {
@@ -1950,7 +1949,7 @@ async function getRouteCoords(r) {
       }
     }
   } else if (Array.isArray(r.path) && r.path.length > 1) {
-    coords = r.path.map(p => [parseFloat(p.lng ?? p[1]), parseFloat(p.lat ?? p[0])]);
+    coords = r.path.map(_pt).filter(Boolean).map(p => [p.lng, p.lat]);
   }
   if (coords?.length > 1) routeGeomCache[r.id] = coords;
   return coords;
@@ -1979,6 +1978,12 @@ async function showRouteLine(routeId, opts = {}) {
   clearRouteLine();
 
   let coords;
+  function _pt(p) {
+  const isArr = Array.isArray(p);
+  const lat = parseFloat(p?.lat ?? p?.latitude  ?? (isArr ? p[0] : undefined));
+  const lng = parseFloat(p?.lng ?? p?.lon ?? p?.longitude ?? (isArr ? p[1] : undefined));
+  return (isFinite(lat) && isFinite(lng)) ? { lat, lng } : null;
+}
   try { coords = await getRouteCoords(r); }
   catch (e) { console.warn('Route line failed:', e); }
   if (!coords || coords.length < 2) { alert('This route has no path set up yet.'); return; }
