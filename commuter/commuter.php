@@ -1894,6 +1894,7 @@ window.addEventListener('resize', () => map.resize());
 /* ══════════════════════════════════════════════
    JEEPNEY ROUTE LINE (road-snapped, Grab style)
 ══════════════════════════════════════════════ */
+const MANUAL_ROUTES = {};
 const RL_SRC = 'jl-route-src', RL_CASING = 'jl-route-casing',
       RL_LINE = 'jl-route-line', RL_ARROWS = 'jl-route-arrows';
 const WK_SRC = 'jl-walk-src', WK_LINE = 'jl-walk-line';
@@ -1933,12 +1934,9 @@ async function getRouteCoords(r) {
 
   const manual = MANUAL_ROUTES[r.id] ?? MANUAL_ROUTES[r.name];
   if (manual && manual.length > 1) w = manual;
-  else if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
+  let coords = null, w = null;
 
-   if (w) {
-    w = w.map(p => Array.isArray(p)
-      ? { lat: parseFloat(p[0]), lng: parseFloat(p[1]) }
-      : { lat: parseFloat(p.lat), lng: parseFloat(p.lng) });
+  if (Array.isArray(r.waypoints) && r.waypoints.length > 1) w = r.waypoints;
 
     if (w.length > 40) {
       // already a dense traced line: draw it as is, no TomTom calls
