@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jeeplify – Jeepneys in Bacolod</title>
+<meta name="description" content="A jeepney app for Bacolod City. Free on Android.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#f6f1de;--ink:#080e1c;--muted:#4a5470;--route:#2563eb;--blue:#2563eb;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{position:relative;margin:0;background:var(--bg);color:var(--ink);font:400 1.05rem/1.6 'Plus Jakarta Sans',system-ui,sans-serif}
+h1,h2,h3{font-family:'Plus Jakarta Sans',sans-serif;margin:0;line-height:1.02;letter-spacing:-.025em}
+.wrap{max-width:1040px;margin:0 auto;padding:0 1.25rem}
+nav{display:flex;justify-content:space-between;align-items:center;padding:1.1rem 0}
+.brand{font:800 1.4rem 'Plus Jakarta Sans',sans-serif;letter-spacing:-.02em}
+.btn{display:inline-block;background:var(--blue);color:#fff;padding:.8rem 1.3rem;border-radius:2rem;font-weight:600;text-decoration:none;border:0;cursor:pointer;font-size:1rem}
+.btn.ghost{background:rgba(8,14,28,.06);color:var(--ink);border:1px solid rgba(8,14,28,.22)}
+nav .btn.ghost,.hero .btn.ghost{background:rgba(255,255,255,.5);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--route);outline-offset:3px}
+.hero{display:grid;gap:3rem;padding:2rem 0 5rem;align-items:center}
+.hero h1{font-size:clamp(3rem,8.5vw,6rem);font-weight:800;max-width:12ch}
+.hero p{max-width:30rem;color:#2b3550;font-size:1.15rem;margin:1.4rem 0 1.8rem}
+section h2{font-size:clamp(2rem,5vw,3.2rem);margin-bottom:2.2rem;max-width:34rem}
+.feat{display:grid;gap:2rem}
+@media(min-width:760px){.feat{grid-template-columns:repeat(3,1fr)}}
+.feat h3{font-size:1.4rem;margin-bottom:.5rem}
+.feat p{margin:0;color:var(--muted)}
+.go{text-align:center}
+.go h2{margin:0 auto 1rem}
+.go p{color:var(--muted);max-width:28rem;margin:0 auto 1.6rem}
+.actions{display:flex;gap:.75rem;flex-wrap:wrap}
+.actions.mid{justify-content:center}
+
+/* Background photo: put Modern.jpg in the same folder as this file */
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:url('Modern.jpg') center/cover no-repeat}
+
+/* Glass panels */
+.glass,main>section{background:rgba(255,255,255,.3);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.45);border-radius:2rem;box-shadow:none}
+.hero>.glass{max-width:640px;padding:2.4rem}
+main>section{padding:2.5rem;margin:1.5rem 0}
+main>section.go{margin-bottom:4rem}
+@media(max-width:600px){.hero>.glass,main>section{padding:1.5rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav><span class="brand">Jeeplify</span><a class="btn ghost" href="https://example.com/jeeplify-android">Get the app</a></nav>
+<main>
+<div class="hero">
+  <div class="glass">
+    <h1>Jeepneys in Bacolod, made easy.</h1>
+    <p>Get around Bacolod City by jeepney. Free on Android.</p>
+    <div class="actions"><a class="btn" href="https://example.com/jeeplify-android">Download for Android</a><a class="btn ghost" href="https://jeeplify-1.onrender.com/">Continue in browser</a></div>
+  </div>
+</div>
+
+<section><h2>Getting around Bacolod, simpler.</h2>
+<div class="feat">
+  <div><h3>Find your jeepney</h3><p>Look up which jeepney to take around the city.</p></div>
+  <div><h3>Made for Bacolod</h3><p>Built for jeepney riders around the city.</p></div>
+  <div><h3>Free on Android</h3><p>Download it and start riding.</p></div>
+</div></section>
+
+<section class="go" id="get"><h2>Your next ride starts here</h2>
+<p>Free on Android.</p>
+<div class="actions mid"><a class="btn" href="https://example.com/jeeplify-android">Download for Android</a><a class="btn ghost" href="https://jeeplify-1.onrender.com/">Continue in browser</a></div></section>
+</main>
+</div>
+</body>
+</html>
